@@ -13,13 +13,12 @@
     "vercel-build": "node scripts/migrate.mjs && next build"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "jose": "^6.2.12",
-    "next": "^16.4.1",
-    "pg": "^8.23.1",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "zod": "^4.6.7"
+    "bcryptjs": "3.0.3",
+    "jose": "6.2.12",
+    "next": "16.4.1",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
@@ -29,5 +28,8 @@
     "@types/react-dom": "^19.3.0",
     "typescript": "5.9",
     "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
