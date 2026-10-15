@@ -1,0 +1,104 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1c2430;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --brand: #0f766e;
+  --pos: #15803d;
+  --neg: #c62828;
+  --warn: #b45309;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151b;
+    --card: #1a2029;
+    --text: #e8ecf1;
+    --muted: #98a2b3;
+    --line: #2b3440;
+    --brand: #2dd4bf;
+    --pos: #4ade80;
+    --neg: #f87171;
+    --warn: #fbbf24;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+a { color: var(--brand); }
+h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+h2 { font-size: 1.05rem; margin: 0 0 .75rem; }
+
+.topbar {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .75rem 1rem; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.topbar .logo { font-weight: 700; color: var(--brand); text-decoration: none; margin-right: auto; }
+.topbar nav { display: flex; gap: .25rem; flex-wrap: wrap; }
+.topbar nav a { padding: .35rem .6rem; border-radius: 6px; text-decoration: none; color: var(--text); }
+.topbar nav a:hover { background: var(--bg); }
+main { max-width: 980px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1rem; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+.grid .card { margin-bottom: 0; }
+.stat .label { color: var(--muted); font-size: .85rem; }
+.stat .value { font-size: 1.35rem; font-weight: 650; }
+.muted { color: var(--muted); }
+.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.money.pos { color: var(--pos); }
+.money.neg { color: var(--neg); }
+
+.flash { padding: .6rem .8rem; border-radius: 8px; margin: 0 0 1rem; }
+.flash.ok { background: color-mix(in srgb, var(--pos) 15%, transparent); }
+.flash.erro { background: color-mix(in srgb, var(--neg) 15%, transparent); }
+
+form.stack { display: grid; gap: .75rem; }
+.fields { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+label { display: grid; gap: .25rem; font-size: .9rem; }
+label.check { display: flex; align-items: center; gap: .5rem; }
+input, select {
+  font: inherit; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--text); width: 100%;
+}
+input[type="checkbox"] { width: auto; }
+button {
+  font: inherit; cursor: pointer; border: 1px solid var(--brand); background: var(--brand);
+  color: #fff; padding: .5rem .9rem; border-radius: 8px;
+}
+button.link { background: none; border: none; color: var(--brand); padding: .2rem .3rem; }
+button.danger { color: var(--neg); }
+.hint { color: var(--muted); font-size: .8rem; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .8rem; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; }
+td.actions { white-space: nowrap; text-align: right; }
+td.actions form { display: inline; }
+.tag { font-size: .75rem; padding: .1rem .45rem; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.tag.pendente { color: var(--warn); border-color: var(--warn); }
+.tag.atrasado { color: var(--neg); border-color: var(--neg); }
+
+.month-nav { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+.month-nav a { text-decoration: none; font-size: 1.3rem; padding: 0 .5rem; }
+
+.bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: .3rem; }
+.bar > span { display: block; height: 100%; background: var(--brand); }
+.bar.over > span { background: var(--neg); }
+.cat-row { margin-bottom: .8rem; }
+.cat-row .top { display: flex; justify-content: space-between; gap: 1rem; }
+
+.auth { max-width: 380px; margin: 8vh auto; padding: 0 1rem; }
+.auth .brand { text-align: center; color: var(--brand); font-size: 1.6rem; font-weight: 700; margin-bottom: 1rem; }
+
+@media (max-width: 640px) {
+  .hide-sm { display: none; }
+  td, th { padding: .5rem .25rem; }
+  td.actions { white-space: normal; }
+  td.actions form, td.actions button { display: block; margin-left: auto; text-align: right; }
+}
