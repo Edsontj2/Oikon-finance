@@ -1,4 +1,4 @@
-import { UserError } from "./errors";
+import { UserError } from "@/data/errors";
 
 /** Tamanhos máximos; os mesmos limites existem no banco (migração 0002) e nos campos da tela. */
 export const LIMITS = {

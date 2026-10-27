@@ -237,7 +237,7 @@ describe("resumo do mês e painel", () => {
     expect(d.totalBalance).toBe(R(920));
     expect(d.accounts.find((a) => a.id === contaId)?.balance).toBe(R(920));
     // 10/10 e 01/10 pendentes, ambos antes de 15/10.
-    expect(d.overdue).toEqual({ count: 2, expense: R(90), income: 0 });
+    expect(d.overdue).toEqual({ count: 2, expense: R(90), income: 0, transfer: 0 });
     const feira = d.expenseCategories.find((c) => c.id === mercado);
     expect(feira).toMatchObject({ monthTotal: R(130), monthlyLimit: R(100) });
   });
@@ -329,8 +329,8 @@ describe("cada usuário só vê e mexe no que é seu", () => {
     expect(await deleteTransaction(db, b.userId, lancamentoA)).toBe(0);
     expect(await deleteTransaction(db, b.userId, lancamentoA, "future")).toBe(0);
     // B tenta excluir conta e categoria de A.
-    await deleteAccount(db, b.userId, a.contaId);
-    await deleteCategory(db, b.userId, catA);
+    await expect(deleteAccount(db, b.userId, a.contaId)).rejects.toThrow(UserError);
+    await expect(deleteCategory(db, b.userId, catA)).rejects.toThrow(UserError);
 
     expect((await balance(a.userId, a.contaId)).atual).toBe(R(900));
     expect((await listCategories(db, a.userId, "2026-10")).some((c) => c.id === catA)).toBe(true);

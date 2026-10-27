@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import type { Db } from "@/lib/db";
 import { UserError, pgCode } from "./errors";
-import { LIMITS, requiredText } from "./limits";
+import { LIMITS, requiredText } from "@/domain/limits";
 
 const defaultCategories: Array<[string, "income" | "expense"]> = [
   ["Salário", "income"],

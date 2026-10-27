@@ -1,3 +1,5 @@
+import type { Db } from "@/lib/db";
+
 /** Erro com mensagem que pode ser mostrada para quem usa o app. */
 export class UserError extends Error {}
 
@@ -24,6 +26,22 @@ export function assertUuid(id: unknown, notFound: string): asserts id is string 
  */
 export function submissionKey(key: unknown): string | null {
   return isUuid(key) ? key : null;
+}
+
+/**
+ * Valida o formulário; se a validação recusar (ex.: nome repetido) porque o mesmo envio
+ * já foi gravado, devolve null em vez do erro: o duplo clique não vira mensagem de erro.
+ */
+export async function validateOnce<T>(db: Db, userId: string, key: string | null, validate: () => Promise<T>): Promise<T | null> {
+  try {
+    return await validate();
+  } catch (err) {
+    if (key && err instanceof UserError) {
+      const { rows } = await db.query("SELECT 1 FROM form_submissions WHERE user_id = $1 AND key = $2", [userId, key]);
+      if (rows.length) return null;
+    }
+    throw err;
+  }
 }
 
 /** Converte erros do banco que o usuário pode causar em mensagens; o resto sobe como está. */

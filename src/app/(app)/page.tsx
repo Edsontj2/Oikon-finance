@@ -1,38 +1,75 @@
 import Link from "next/link";
+import { AlertTriangle, CircleAlert, Info, Sparkles, TrendingUp } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
-import { currentMonth, formatDate, isValidMonth } from "@/lib/dates";
+import { formatDate, formatMonth } from "@/lib/dates";
+import { monthParam, type SearchParams } from "@/lib/search-params";
 import { getDashboard } from "@/data/dashboard";
-import { accountTypes } from "@/data/accounts";
-import { Flash, Money, MonthNav, param, type SearchParams } from "../ui";
-import { signedAmount } from "./lancamentos/amount";
+import { accountTypes } from "@/domain/accounts";
+import { signedAmount } from "@/domain/transactions";
+import type { Insight } from "@/domain/insights";
+import { Money } from "@/components/money";
+import { MonthNav } from "@/components/month-nav";
+import { LimitBar } from "./categorias/limit-bar";
+
+const insightIcons: Record<Insight["tone"], typeof Info> = {
+  bad: CircleAlert,
+  warn: AlertTriangle,
+  good: TrendingUp,
+  info: Info,
+};
 
 export default async function PainelPage({ searchParams }: { searchParams: SearchParams }) {
-  const params = await searchParams;
   const userId = await requireUserId();
-  const mes = param(params, "mes");
-  const month = mes && isValidMonth(mes) ? mes : currentMonth();
+  const month = monthParam(await searchParams);
   const d = await getDashboard(getDb(), userId, month);
   const result = d.month.income - d.month.expense;
+  const categoryRows = [
+    ...d.expenseCategories,
+    ...(d.uncategorized.paidTotal + d.uncategorized.pendingTotal > 0
+      ? [{ id: "sem-categoria", name: "Sem categoria", monthlyLimit: null, ...d.uncategorized, monthTotal: d.uncategorized.paidTotal + d.uncategorized.pendingTotal }]
+      : []),
+  ].sort((a, b) => b.monthTotal - a.monthTotal);
 
   return (
     <>
-      <h1>Painel</h1>
-      <Flash params={params} />
+      <div className="page-head">
+        <h1>Painel</h1>
+      </div>
       <MonthNav month={month} path="/" />
+
+      <section className="card insights" aria-labelledby="insights-title">
+        <h2 id="insights-title"><Sparkles size={18} aria-hidden /> Análise de {formatMonth(month).split(" de ")[0]}</h2>
+        <ul>
+          {d.insights.map((insight, i) => {
+            const Icon = insightIcons[insight.tone];
+            return (
+              <li key={i} className={`insight insight-${insight.tone}`}>
+                <Icon size={18} aria-hidden />
+                <div>
+                  <strong>{insight.title}</strong>
+                  {insight.detail && <span>{insight.detail}</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       <div className="grid">
         <div className="card stat">
-          <div className="label">Saldo total (todas as contas)</div>
+          <div className="label">Saldo total hoje</div>
           <div className="value"><Money cents={d.totalBalance} testId="saldo-total" /></div>
         </div>
         <div className="card stat">
-          <div className="label">Entradas recebidas no mês</div>
+          <div className="label">Entradas recebidas</div>
           <div className="value"><Money cents={d.month.income} testId="entradas-mes" /></div>
+          {d.month.pendingIncome > 0 && <div className="hint">+ <Money cents={d.month.pendingIncome} testId="a-receber" /> a receber</div>}
         </div>
         <div className="card stat">
-          <div className="label">Saídas pagas no mês</div>
+          <div className="label">Saídas pagas</div>
           <div className="value"><Money cents={-d.month.expense} testId="saidas-mes" /></div>
+          {d.month.pendingExpense > 0 && <div className="hint"><Money cents={d.month.pendingExpense} testId="a-pagar" /> a pagar</div>}
         </div>
         <div className="card stat">
           <div className="label">Resultado do mês</div>
@@ -40,90 +77,63 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
         </div>
       </div>
 
-      <div className="grid">
-        <div className="card stat">
-          <div className="label">A receber no mês</div>
-          <div className="value"><Money cents={d.month.pendingIncome} testId="a-receber" /></div>
-        </div>
-        <div className="card stat">
-          <div className="label">A pagar no mês</div>
-          <div className="value"><Money cents={d.month.pendingExpense} testId="a-pagar" /></div>
-        </div>
-        {d.overdue.count > 0 && (
-          <div className="card stat">
-            <div className="label">Pendentes atrasados</div>
-            <div className="value" data-testid="atrasados">{d.overdue.count}</div>
-            <div className="muted">
-              <Money cents={-d.overdue.expense} /> a pagar · <Money cents={d.overdue.income} /> a receber
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="grid">
+      <div className="grid grid-2">
         <section className="card">
           <h2>Contas</h2>
-          <table>
-            <tbody>
-              {d.accounts.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.name}<div className="hint">{accountTypes[a.type]}</div></td>
-                  <td className="num"><Money cents={a.balance} testId={`saldo-${a.name}`} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p><Link href="/contas">Gerenciar contas</Link></p>
+          <ul className="mini-list">
+            {d.accounts.map((a) => (
+              <li key={a.id}>
+                <span>{a.name}<span className="hint">{accountTypes[a.type]}</span></span>
+                <Money cents={a.balance} testId={`saldo-${a.name}`} />
+              </li>
+            ))}
+          </ul>
+          <Link href="/contas" className="card-link">Gerenciar contas</Link>
         </section>
 
         <section className="card">
           <h2>Gastos por categoria</h2>
-          {d.expenseCategories.length === 0 && <p className="muted">Nenhuma saída neste mês.</p>}
-          {d.expenseCategories.map((c) => {
-            const pct = c.monthlyLimit ? Math.min(100, Math.round((c.monthTotal / c.monthlyLimit) * 100)) : 0;
-            const over = c.monthlyLimit !== null && c.monthTotal > c.monthlyLimit;
-            return (
-              <div key={c.id} className="cat-row">
-                <div className="top">
-                  <span>{c.name}</span>
-                  <span>
-                    <Money cents={c.monthTotal} />
-                    {c.monthlyLimit && <span className="muted"> de <Money cents={c.monthlyLimit} /></span>}
+          {categoryRows.length === 0 ? (
+            <p className="muted">Nenhuma saída neste mês.</p>
+          ) : (
+            <ul className="mini-list">
+              {categoryRows.map((c) => (
+                <li key={c.id} className="mini-list-block">
+                  <span className="mini-list-line">
+                    <span>{c.name}</span>
+                    <span>
+                      <Money cents={c.paidTotal} />
+                      {c.monthlyLimit !== null && <span className="muted"> de <Money cents={c.monthlyLimit} /></span>}
+                    </span>
                   </span>
-                </div>
-                {c.monthlyLimit && (
-                  <div className={`bar ${over ? "over" : ""}`} title={`${pct}% do limite`}>
-                    <span style={{ width: `${pct}%` }} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  {c.pendingTotal > 0 && <span className="hint">+ <Money cents={c.pendingTotal} /> pendente</span>}
+                  {c.monthlyLimit !== null && <LimitBar total={c.monthTotal} limit={c.monthlyLimit} />}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href={`/categorias?mes=${month}`} className="card-link">Ver categorias</Link>
         </section>
       </div>
 
       <section className="card">
         <h2>Últimos lançamentos do mês</h2>
         {d.recent.length === 0 ? (
-          <p className="muted">
-            Nada lançado neste mês. <Link href={`/lancamentos?mes=${month}`}>Fazer um lançamento</Link>
-          </p>
+          <p className="muted">Nada lançado neste mês.</p>
         ) : (
-          <table>
-            <tbody>
-              {d.recent.map((t) => (
-                <tr key={t.id}>
-                  <td className="hide-sm">{formatDate(t.date)}</td>
-                  <td>
-                    {t.description} {!t.paid && <span className="tag pendente">pendente</span>}
-                  </td>
-                  <td className="num"><Money cents={signedAmount(t)} signed={t.type !== "transfer"} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="mini-list">
+            {d.recent.map((t) => (
+              <li key={t.id}>
+                <span>
+                  {t.description} {!t.paid && <span className="tag tag-pending">pendente</span>}
+                  <span className="hint">{formatDate(t.date)}</span>
+                </span>
+                <Money cents={signedAmount(t)} signed={t.type !== "transfer"} />
+              </li>
+            ))}
+          </ul>
         )}
-        <p><Link href={`/lancamentos?mes=${month}`}>Ver todos</Link></p>
+        <Link href={`/lancamentos?mes=${month}`} className="card-link">Ver todos os lançamentos do mês</Link>
       </section>
     </>
   );

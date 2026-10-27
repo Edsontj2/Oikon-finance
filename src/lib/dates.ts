@@ -9,13 +9,22 @@ export function currentMonth(now: Date = new Date()): string {
   return today(now).slice(0, 7);
 }
 
+/** Anos aceitos pelo app (o banco não aceita ano 0000, e datas absurdas viram erro de digitação). */
+export const MIN_YEAR = 1900;
+export const MAX_YEAR = 2100;
+
+function yearInRange(year: number): boolean {
+  return year >= MIN_YEAR && year <= MAX_YEAR;
+}
+
 export function isValidMonth(month: string): boolean {
-  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && yearInRange(Number(month.slice(0, 4)));
 }
 
 export function isValidDate(date: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const [y, m, d] = date.split("-").map(Number);
+  if (!yearInRange(y)) return false;
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
