@@ -10,7 +10,16 @@ export const LIMITS = {
   accountName: 60,
   categoryName: 60,
   description: 120,
+  /** Maior valor aceito em qualquer campo de dinheiro: R$ 1 bilhão, em centavos. */
+  maxCents: 100_000_000_000,
 } as const;
+
+/** Valor em centavos inteiro e dentro do limite (em módulo). */
+export function isValidCents(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Math.abs(value as number) <= LIMITS.maxCents;
+}
+
+export const TOO_BIG = "Valor alto demais: o máximo é R$ 1 bilhão.";
 
 /** Texto obrigatório, sem espaços nas pontas e dentro do limite. */
 export function requiredText(value: unknown, max: number, emptyMessage: string, label: string): string {

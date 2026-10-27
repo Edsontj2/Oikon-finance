@@ -14,7 +14,13 @@ export function getDb(): Pool {
   return pool;
 }
 
-/** Postgres devolve bigint/numeric como texto; aqui viram number (centavos cabem com folga). */
+/**
+ * Postgres devolve bigint/numeric como texto; aqui viram number. Com o teto de R$ 1 bilhão por
+ * valor as somas cabem com folga; se um dia não couberem, é erro e não um saldo arredondado.
+ */
 export function num(value: unknown): number {
-  return value === null || value === undefined ? 0 : Number(value);
+  if (value === null || value === undefined) return 0;
+  const n = Number(value);
+  if (!Number.isSafeInteger(n)) throw new Error(`Valor fora do intervalo seguro: ${String(value)}`);
+  return n;
 }

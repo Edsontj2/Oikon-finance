@@ -2,7 +2,8 @@ const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 
 /** 123456 -> "R$ 1.234,56" */
 export function formatMoney(cents: number): string {
-  return brl.format(cents / 100);
+  // "+ 0" evita "-R$ 0,00" quando chega -0.
+  return brl.format(cents / 100 + 0);
 }
 
 /**
@@ -36,5 +37,5 @@ export function parseMoney(input: string): number | null {
 
   const cents = Number(intPart) * 100 + Number(decPart.padEnd(2, "0") || 0);
   if (!Number.isSafeInteger(cents)) return null;
-  return sign * cents;
+  return cents === 0 ? 0 : sign * cents;
 }

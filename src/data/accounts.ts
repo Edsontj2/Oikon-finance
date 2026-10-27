@@ -1,7 +1,7 @@
 import { num, type Db } from "@/lib/db";
 import { today } from "@/lib/dates";
 import { UserError, assertUuid, pgCode, submissionKey, toUserError, validateOnce } from "./errors";
-import { LIMITS, requiredText } from "@/domain/limits";
+import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
 import {
   accountTypes,
@@ -57,6 +57,7 @@ async function validateAccount(db: Db, userId: string, input: AccountInput, exce
   const name = requiredText(input.name, LIMITS.accountName, "Informe o nome da conta.", "O nome da conta");
   if (!isAccountType(input.type)) throw new UserError("Tipo de conta inválido.");
   if (!Number.isSafeInteger(input.initialBalance)) throw new UserError("Saldo inicial inválido.");
+  if (!isValidCents(input.initialBalance)) throw new UserError(TOO_BIG);
   const { rows } = await db.query(
     "SELECT 1 FROM accounts WHERE user_id = $1 AND lower(name) = lower($2) AND id IS DISTINCT FROM $3::uuid",
     [userId, name, exceptId ?? null],

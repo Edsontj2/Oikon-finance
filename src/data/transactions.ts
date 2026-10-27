@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { num, type Db } from "@/lib/db";
 import { addMonths, isValidDate, monthRange } from "@/lib/dates";
 import { UserError, assertUuid, isUuid, submissionKey, toUserError } from "./errors";
-import { LIMITS, requiredText } from "@/domain/limits";
+import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
 import {
   MAX_REPEAT,
@@ -48,6 +48,7 @@ async function validateTransaction(db: Db, userId: string, input: TransactionInp
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0) {
     throw new UserError("O valor precisa ser maior que zero.");
   }
+  if (!isValidCents(input.amount)) throw new UserError(TOO_BIG);
   if (!isValidDate(input.date)) throw new UserError("Data inválida.");
 
   const toAccountId = input.type === "transfer" ? input.toAccountId || null : null;

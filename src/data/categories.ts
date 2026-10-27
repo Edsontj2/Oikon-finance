@@ -1,7 +1,7 @@
 import { num, type Db } from "@/lib/db";
 import { monthRange } from "@/lib/dates";
 import { UserError, assertUuid, pgCode, submissionKey, toUserError, validateOnce } from "./errors";
-import { LIMITS, requiredText } from "@/domain/limits";
+import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
 import {
   categoryKinds,
@@ -56,6 +56,7 @@ async function validateCategory(db: Db, userId: string, kind: CategoryKind, inpu
     if (!Number.isSafeInteger(input.monthlyLimit) || input.monthlyLimit <= 0) {
       throw new UserError("O limite mensal precisa ser maior que zero.");
     }
+    if (!isValidCents(input.monthlyLimit)) throw new UserError(TOO_BIG);
   }
   const { rows } = await db.query(
     `SELECT 1 FROM categories
