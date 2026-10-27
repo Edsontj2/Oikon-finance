@@ -6,14 +6,14 @@ import { getDashboard, monthSummary } from "@/data/dashboard";
 import { createTransaction, deleteTransaction, listTransactions, setPaid, type NewTransaction } from "@/data/transactions";
 import { authenticate, createUser } from "@/data/users";
 import { UserError } from "@/data/errors";
-import { freshDb, newUser } from "./setup";
+import { freshDb, newUser, uniqueEmail } from "./setup";
 
 let db: pg.Pool;
 beforeAll(async () => {
   db = await freshDb();
 });
 afterAll(async () => {
-  await db.end();
+  await db?.end();
 });
 
 const R = (reais: number) => Math.round(reais * 100);
@@ -54,12 +54,13 @@ describe("cadastro", () => {
   });
 
   it("login confere a senha e o e-mail não diferencia maiúsculas", async () => {
-    const id = await createUser(db, { name: "Ana", email: "Ana@Exemplo.com", password: "senha-da-ana" });
-    expect(await authenticate(db, "ana@exemplo.com", "senha-da-ana")).toBe(id);
-    expect(await authenticate(db, "  ANA@EXEMPLO.COM ", "senha-da-ana")).toBe(id);
-    expect(await authenticate(db, "ana@exemplo.com", "errada")).toBeNull();
-    expect(await authenticate(db, "ninguem@exemplo.com", "senha-da-ana")).toBeNull();
-    await expect(createUser(db, { name: "Outra", email: "ana@exemplo.com", password: "12345678" })).rejects.toThrow(
+    const email = uniqueEmail("Ana").replace("@teste.com", "@Exemplo.com");
+    const id = await createUser(db, { name: "Ana", email, password: "senha-da-ana" });
+    expect(await authenticate(db, email.toLowerCase(), "senha-da-ana")).toBe(id);
+    expect(await authenticate(db, `  ${email.toUpperCase()} `, "senha-da-ana")).toBe(id);
+    expect(await authenticate(db, email.toLowerCase(), "errada")).toBeNull();
+    expect(await authenticate(db, uniqueEmail("ninguem"), "senha-da-ana")).toBeNull();
+    await expect(createUser(db, { name: "Outra", email: email.toLowerCase(), password: "12345678" })).rejects.toThrow(
       "Já existe uma conta com esse e-mail.",
     );
   });

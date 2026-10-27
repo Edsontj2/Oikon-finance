@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
+import { E2E_DATABASE_URL as DATABASE_URL } from "./e2e/db-url";
 
-const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgres://oikon:oikon@localhost:5432/oikon_test";
 const PORT = 3100;
 
 export default defineConfig({

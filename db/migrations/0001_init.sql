@@ -1,4 +1,4 @@
--- Oikon Finance: 4 tabelas. Valores sempre em centavos (inteiro) para não haver erro de arredondamento.
+-- 0001: tabelas iniciais. Valores sempre em centavos (inteiro) para não haver erro de arredondamento.
 CREATE TABLE IF NOT EXISTS users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name          text NOT NULL,
