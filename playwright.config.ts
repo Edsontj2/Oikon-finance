@@ -14,6 +14,10 @@ export default defineConfig({
     url: `http://localhost:${PORT}/login`,
     timeout: 240_000,
     reuseExistingServer: false,
-    env: { DATABASE_URL, AUTH_SECRET: "segredo-de-teste-e2e-com-mais-de-32-caracteres" },
+    env: {
+      DATABASE_URL,
+      AUTH_SECRET: "segredo-de-teste-e2e-com-mais-de-32-caracteres",
+      SIGNUP_LIMIT_PER_IP: "1000",
+    },
   },
 });

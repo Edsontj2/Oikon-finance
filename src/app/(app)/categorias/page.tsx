@@ -1,4 +1,6 @@
 import { getDb } from "@/lib/db";
+import { SubmitButton } from "../../submit-button";
+import { randomUUID } from "node:crypto";
 import { requireUserId } from "@/lib/auth";
 import { currentMonth, formatMonth } from "@/lib/dates";
 import { listCategories, type Category } from "@/data/categories";
@@ -63,6 +65,7 @@ export default async function CategoriasPage({ searchParams }: { searchParams: S
       <section className="card">
         <h2>Nova categoria</h2>
         <form action={criarCategoria} className="stack">
+          <input type="hidden" name="chave" value={randomUUID()} />
           <div className="fields">
             <label>Nome<input name="nome" required maxLength={60} /></label>
             <label>
@@ -78,7 +81,7 @@ export default async function CategoriasPage({ searchParams }: { searchParams: S
               <span className="hint">Só para saídas. O painel avisa quando passar.</span>
             </label>
           </div>
-          <div><button type="submit">Criar categoria</button></div>
+          <div><SubmitButton>Criar categoria</SubmitButton></div>
         </form>
       </section>
     </>

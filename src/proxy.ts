@@ -3,12 +3,16 @@ import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 const publicPaths = ["/login", "/cadastro"];
 
+/**
+ * Primeira barreira, barata: sem cookie válido, só as telas públicas abrem.
+ * Quem está logado e abre /login é redirecionado pela própria página, depois de
+ * conferir no banco que a sessão ainda existe (um cookie de sessão encerrada não vale).
+ */
 export async function proxy(request: NextRequest) {
-  const loggedIn = (await verifySession(request.cookies.get(SESSION_COOKIE)?.value)) !== null;
   const isPublic = publicPaths.includes(request.nextUrl.pathname);
-
-  if (!loggedIn && !isPublic) return NextResponse.redirect(new URL("/login", request.url));
-  if (loggedIn && isPublic) return NextResponse.redirect(new URL("/", request.url));
+  if (!isPublic && !(await verifySession(request.cookies.get(SESSION_COOKIE)?.value))) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
   return NextResponse.next();
 }
 

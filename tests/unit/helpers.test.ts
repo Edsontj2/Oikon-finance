@@ -31,8 +31,9 @@ describe("signedAmount", () => {
 
 describe("sessão", () => {
   it("assina e valida o token; rejeita token alterado", async () => {
-    const token = await signSession("11111111-1111-1111-1111-111111111111");
-    expect(await verifySession(token)).toBe("11111111-1111-1111-1111-111111111111");
+    const session = { userId: "11111111-1111-1111-1111-111111111111", sessionId: "22222222-2222-2222-2222-222222222222" };
+    const token = await signSession(session);
+    expect(await verifySession(token)).toEqual(session);
     expect(await verifySession(token.slice(0, -2) + "xx")).toBeNull();
     expect(await verifySession(undefined)).toBeNull();
     expect(await verifySession("lixo")).toBeNull();

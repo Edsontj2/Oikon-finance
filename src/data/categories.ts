@@ -1,6 +1,7 @@
 import { num, type Db } from "@/lib/db";
 import { monthRange } from "@/lib/dates";
-import { UserError, assertUuid, pgCode } from "./errors";
+import { UserError, assertUuid, pgCode, submissionKey, toUserError } from "./errors";
+import { LIMITS, requiredText } from "./limits";
 
 export type CategoryKind = "income" | "expense";
 
@@ -38,23 +39,28 @@ export async function listCategories(db: Db, userId: string, month: string): Pro
 export async function createCategory(
   db: Db,
   userId: string,
-  input: { name: string; kind: CategoryKind; monthlyLimit: number | null },
-): Promise<string> {
-  const name = input.name.trim();
-  if (!name) throw new UserError("Informe o nome da categoria.");
+  input: { name: string; kind: CategoryKind; monthlyLimit: number | null; submissionKey?: string | null },
+): Promise<string | null> {
+  const name = requiredText(input.name, LIMITS.categoryName, "Informe o nome da categoria.", "O nome da categoria");
   if (input.kind !== "income" && input.kind !== "expense") throw new UserError("Tipo de categoria inválido.");
   if (input.monthlyLimit !== null && input.monthlyLimit <= 0) {
     throw new UserError("O limite mensal precisa ser maior que zero.");
   }
   try {
     const { rows } = await db.query<{ id: string }>(
-      "INSERT INTO categories (user_id, name, kind, monthly_limit_cents) VALUES ($1, $2, $3, $4) RETURNING id",
-      [userId, name, input.kind, input.kind === "expense" ? input.monthlyLimit : null],
+      `WITH claim AS (
+         INSERT INTO form_submissions (user_id, key) SELECT $1, $5::uuid WHERE $5::uuid IS NOT NULL
+         ON CONFLICT DO NOTHING RETURNING 1
+       )
+       INSERT INTO categories (user_id, name, kind, monthly_limit_cents)
+       SELECT $1, $2, $3, $4 WHERE $5::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
+       RETURNING id`,
+      [userId, name, input.kind, input.kind === "expense" ? input.monthlyLimit : null, submissionKey(input.submissionKey)],
     );
-    return rows[0].id;
+    return rows[0]?.id ?? null;
   } catch (err) {
     if (pgCode(err) === "23505") throw new UserError("Já existe uma categoria com esse nome.");
-    throw err;
+    throw toUserError(err);
   }
 }
 

@@ -1,4 +1,6 @@
 import { getDb } from "@/lib/db";
+import { SubmitButton } from "../../submit-button";
+import { randomUUID } from "node:crypto";
 import { requireUserId } from "@/lib/auth";
 import { currentMonth, formatDate, isValidMonth, today } from "@/lib/dates";
 import { listAccounts } from "@/data/accounts";
@@ -59,6 +61,7 @@ export default async function LancamentosPage({ searchParams }: { searchParams: 
         ) : (
           <form action={criarLancamento} className="stack" style={{ marginTop: "1rem" }}>
             <input type="hidden" name="voltar" value={back} />
+            <input type="hidden" name="chave" value={randomUUID()} />
             <div className="fields">
               <label>
                 Tipo
@@ -113,7 +116,7 @@ export default async function LancamentosPage({ searchParams }: { searchParams: 
             <label className="check">
               <input type="checkbox" name="pago" defaultChecked /> Já foi pago / recebido
             </label>
-            <div><button type="submit">Salvar lançamento</button></div>
+            <div><SubmitButton>Salvar lançamento</SubmitButton></div>
           </form>
         )}
       </details>

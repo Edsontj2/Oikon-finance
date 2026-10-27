@@ -30,7 +30,7 @@ async function total(userId: string) {
 
 async function setup(initial = 1000) {
   const userId = await newUser(db);
-  const contaId = await createAccount(db, userId, { name: "Banco", type: "checking", initialBalance: R(initial) });
+  const contaId = (await createAccount(db, userId, { name: "Banco", type: "checking", initialBalance: R(initial) }))!;
   const tx = (data: Partial<NewTransaction> & Pick<NewTransaction, "type" | "amount">) =>
     createTransaction(db, userId, {
       description: "teste",
@@ -129,7 +129,7 @@ describe("pendentes (contas a pagar / a receber)", () => {
 describe("transferências", () => {
   it("tira de uma conta, põe na outra e não muda o total", async () => {
     const { userId, contaId, tx } = await setup(1000);
-    const poupanca = await createAccount(db, userId, { name: "Poupança", type: "savings", initialBalance: 0 });
+    const poupanca = (await createAccount(db, userId, { name: "Poupança", type: "savings", initialBalance: 0 }))!;
     const antes = await total(userId);
 
     await tx({ type: "transfer", amount: R(300), toAccountId: poupanca });
@@ -145,7 +145,7 @@ describe("transferências", () => {
 
   it("transferência pendente só vale quando marcada como paga", async () => {
     const { userId, contaId, tx } = await setup(1000);
-    const outra = await createAccount(db, userId, { name: "Outra", type: "checking", initialBalance: 0 });
+    const outra = (await createAccount(db, userId, { name: "Outra", type: "checking", initialBalance: 0 }))!;
     const [id] = await tx({ type: "transfer", amount: R(100), toAccountId: outra, paid: false });
     expect((await balance(userId, contaId)).atual).toBe(R(1000));
     expect((await balance(userId, outra)).atual).toBe(0);
@@ -156,7 +156,7 @@ describe("transferências", () => {
 
   it("cartão de crédito: gasto deixa negativo e o pagamento da fatura zera", async () => {
     const { userId, contaId, tx } = await setup(2000);
-    const cartao = await createAccount(db, userId, { name: "Cartão", type: "credit_card", initialBalance: 0 });
+    const cartao = (await createAccount(db, userId, { name: "Cartão", type: "credit_card", initialBalance: 0 }))!;
     await tx({ type: "expense", amount: R(120), accountId: cartao });
     await tx({ type: "expense", amount: R(80), accountId: cartao });
     expect((await balance(userId, cartao)).atual).toBe(R(-200));
@@ -170,7 +170,7 @@ describe("transferências", () => {
 
   it("conta com saldo inicial negativo (fatura em aberto)", async () => {
     const { userId } = await setup(0);
-    const cartao = await createAccount(db, userId, { name: "Cartão", type: "credit_card", initialBalance: R(-350) });
+    const cartao = (await createAccount(db, userId, { name: "Cartão", type: "credit_card", initialBalance: R(-350) }))!;
     expect((await balance(userId, cartao)).atual).toBe(R(-350));
   });
 });
@@ -228,7 +228,7 @@ describe("resumo do mês e painel", () => {
 
   it("painel: saldo total, atrasados e gastos por categoria com limite", async () => {
     const { userId, contaId, tx } = await setup(1000);
-    const mercado = await createCategory(db, userId, { name: "Feira", kind: "expense", monthlyLimit: R(100) });
+    const mercado = (await createCategory(db, userId, { name: "Feira", kind: "expense", monthlyLimit: R(100) }))!;
     await tx({ type: "expense", amount: R(80), categoryId: mercado });
     await tx({ type: "expense", amount: R(50), categoryId: mercado, paid: false });
     await tx({ type: "expense", amount: R(40), date: "2026-10-01", paid: false });
@@ -269,7 +269,7 @@ describe("validações", () => {
 
   it("transferência ignora categoria", async () => {
     const { userId, contaId, tx } = await setup(1000);
-    const outra = await createAccount(db, userId, { name: "Outra", type: "cash", initialBalance: 0 });
+    const outra = (await createAccount(db, userId, { name: "Outra", type: "cash", initialBalance: 0 }))!;
     const cat = (await listCategories(db, userId, "2026-10"))[0];
     await tx({ type: "transfer", amount: R(10), toAccountId: outra, categoryId: cat.id });
     const [t] = await listTransactions(db, userId, { month: "2026-10", accountId: contaId });
@@ -282,14 +282,14 @@ describe("contas e categorias", () => {
     const { userId, contaId, tx } = await setup(1000);
     await tx({ type: "expense", amount: R(10) });
     await expect(deleteAccount(db, userId, contaId)).rejects.toThrow(UserError);
-    const vazia = await createAccount(db, userId, { name: "Vazia", type: "cash", initialBalance: 0 });
+    const vazia = (await createAccount(db, userId, { name: "Vazia", type: "cash", initialBalance: 0 }))!;
     await deleteAccount(db, userId, vazia);
     expect((await listAccounts(db, userId)).some((a) => a.id === vazia)).toBe(false);
   });
 
   it("excluir categoria mantém os lançamentos e o saldo", async () => {
     const { userId, contaId, tx } = await setup(1000);
-    const cat = await createCategory(db, userId, { name: "Pets", kind: "expense", monthlyLimit: null });
+    const cat = (await createCategory(db, userId, { name: "Pets", kind: "expense", monthlyLimit: null }))!;
     await tx({ type: "expense", amount: R(60), categoryId: cat });
     await deleteCategory(db, userId, cat);
     const [t] = await listTransactions(db, userId, { month: "2026-10" });
@@ -314,7 +314,7 @@ describe("cada usuário só vê e mexe no que é seu", () => {
     const a = await setup(1000);
     const b = await setup(1000);
     const [lancamentoA] = await a.tx({ type: "expense", amount: R(100) });
-    const catA = await createCategory(db, a.userId, { name: "Só da A", kind: "expense", monthlyLimit: null });
+    const catA = (await createCategory(db, a.userId, { name: "Só da A", kind: "expense", monthlyLimit: null }))!;
 
     // B tenta lançar na conta de A.
     await expect(b.tx({ type: "expense", amount: R(1), accountId: a.contaId })).rejects.toThrow("Conta não encontrada.");

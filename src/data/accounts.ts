@@ -1,5 +1,6 @@
 import { num, type Db } from "@/lib/db";
-import { UserError, assertUuid, pgCode } from "./errors";
+import { UserError, assertUuid, pgCode, submissionKey, toUserError } from "./errors";
+import { LIMITS, requiredText } from "./limits";
 
 export const accountTypes = {
   checking: "Conta corrente",
@@ -57,16 +58,26 @@ export async function listAccounts(db: Db, userId: string): Promise<AccountWithB
 export async function createAccount(
   db: Db,
   userId: string,
-  input: { name: string; type: AccountType; initialBalance: number },
-): Promise<string> {
-  const name = input.name.trim();
-  if (!name) throw new UserError("Informe o nome da conta.");
+  input: { name: string; type: AccountType; initialBalance: number; submissionKey?: string | null },
+): Promise<string | null> {
+  const name = requiredText(input.name, LIMITS.accountName, "Informe o nome da conta.", "O nome da conta");
   if (!(input.type in accountTypes)) throw new UserError("Tipo de conta inválido.");
-  const { rows } = await db.query<{ id: string }>(
-    "INSERT INTO accounts (user_id, name, type, initial_balance_cents) VALUES ($1, $2, $3, $4) RETURNING id",
-    [userId, name, input.type, input.initialBalance],
-  );
-  return rows[0].id;
+  try {
+    // A chave do formulário é gravada no mesmo comando: um reenvio com a mesma chave não cria nada.
+    const { rows } = await db.query<{ id: string }>(
+      `WITH claim AS (
+         INSERT INTO form_submissions (user_id, key) SELECT $1, $5::uuid WHERE $5::uuid IS NOT NULL
+         ON CONFLICT DO NOTHING RETURNING 1
+       )
+       INSERT INTO accounts (user_id, name, type, initial_balance_cents)
+       SELECT $1, $2, $3, $4 WHERE $5::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
+       RETURNING id`,
+      [userId, name, input.type, input.initialBalance, submissionKey(input.submissionKey)],
+    );
+    return rows[0]?.id ?? null;
+  } catch (err) {
+    throw toUserError(err);
+  }
 }
 
 export async function deleteAccount(db: Db, userId: string, accountId: string): Promise<void> {

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SubmitButton } from "../../submit-button";
+import { randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { accountTypes, listAccounts } from "@/data/accounts";
@@ -61,6 +63,7 @@ export default async function ContasPage({ searchParams }: { searchParams: Searc
       <section className="card">
         <h2>Nova conta</h2>
         <form action={criarConta} className="stack">
+          <input type="hidden" name="chave" value={randomUUID()} />
           <div className="fields">
             <label>Nome<input name="nome" required maxLength={60} placeholder="Ex.: Nubank" /></label>
             <label>
@@ -77,7 +80,7 @@ export default async function ContasPage({ searchParams }: { searchParams: Searc
               <span className="hint">Use negativo (ex.: -350,00) para fatura de cartão em aberto.</span>
             </label>
           </div>
-          <div><button type="submit">Criar conta</button></div>
+          <div><SubmitButton>Criar conta</SubmitButton></div>
         </form>
       </section>
     </>

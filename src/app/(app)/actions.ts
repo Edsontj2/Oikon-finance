@@ -31,6 +31,7 @@ export async function criarLancamento(form: FormData) {
       toAccountId: text(form, "destino") || null,
       categoryId: text(form, "categoria") || null,
       repeat,
+      submissionKey: text(form, "chave"),
     });
   });
 }
@@ -59,6 +60,7 @@ export async function criarConta(form: FormData) {
       name: text(form, "nome"),
       type: text(form, "tipo") as AccountType,
       initialBalance: initial,
+      submissionKey: text(form, "chave"),
     });
   });
 }
@@ -76,6 +78,7 @@ export async function criarCategoria(form: FormData) {
       name: text(form, "nome"),
       kind: text(form, "tipo") as CategoryKind,
       monthlyLimit: limit,
+      submissionKey: text(form, "chave"),
     });
   });
 }

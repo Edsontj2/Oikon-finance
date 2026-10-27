@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { num, type Db } from "@/lib/db";
 import { addMonths, isValidDate, monthRange } from "@/lib/dates";
-import { UserError, assertUuid } from "./errors";
+import { UserError, assertUuid, submissionKey, toUserError } from "./errors";
+import { LIMITS, requiredText } from "./limits";
 
 export type TransactionType = "income" | "expense" | "transfer";
 
@@ -39,6 +40,8 @@ export type NewTransaction = {
   categoryId?: string | null;
   /** Quantas vezes lançar, uma por mês (1 = só este mês). */
   repeat?: number;
+  /** Chave única do envio do formulário; reenviar a mesma chave não lança de novo. */
+  submissionKey?: string | null;
 };
 
 export const MAX_REPEAT = 60;
@@ -49,13 +52,12 @@ export function seriesDates(firstDate: string, repeat: number): string[] {
 }
 
 export async function createTransaction(db: Db, userId: string, input: NewTransaction): Promise<string[]> {
-  const description = input.description.trim();
   const repeat = input.repeat ?? 1;
   const toAccountId = input.type === "transfer" ? input.toAccountId || null : null;
   const categoryId = input.type === "transfer" ? null : input.categoryId || null;
 
   if (!(input.type in transactionTypes)) throw new UserError("Tipo de lançamento inválido.");
-  if (!description) throw new UserError("Informe a descrição.");
+  const description = requiredText(input.description, LIMITS.description, "Informe a descrição.", "A descrição");
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0) {
     throw new UserError("O valor precisa ser maior que zero.");
   }
@@ -96,15 +98,29 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
   // Só a primeira ocorrência herda "pago"; as dos próximos meses ficam pendentes.
   const paid = dates.map((_, i) => (i === 0 ? input.paid : false));
 
-  const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO transactions
-       (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id)
-     SELECT $1, $2, $3, $4, d.date, d.paid, $5, $6, $7, $8
-       FROM unnest($9::date[], $10::boolean[]) AS d(date, paid)
-     RETURNING id`,
-    [userId, input.type, description, input.amount, input.accountId, toAccountId, categoryId, seriesId, dates, paid],
-  );
-  return rows.map((r) => r.id);
+  try {
+    // Um único comando: grava a chave do formulário e os lançamentos juntos.
+    // Se a chave já foi usada (duplo clique, reenvio), nada é lançado e devolve [].
+    const { rows } = await db.query<{ id: string }>(
+      `WITH claim AS (
+         INSERT INTO form_submissions (user_id, key) SELECT $1, $11::uuid WHERE $11::uuid IS NOT NULL
+         ON CONFLICT DO NOTHING RETURNING 1
+       )
+       INSERT INTO transactions
+         (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id)
+       SELECT $1, $2, $3, $4, d.date, d.paid, $5, $6, $7, $8
+         FROM unnest($9::date[], $10::boolean[]) AS d(date, paid)
+        WHERE $11::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
+       RETURNING id`,
+      [
+        userId, input.type, description, input.amount, input.accountId, toAccountId, categoryId, seriesId,
+        dates, paid, submissionKey(input.submissionKey),
+      ],
+    );
+    return rows.map((r) => r.id);
+  } catch (err) {
+    throw toUserError(err);
+  }
 }
 
 export async function listTransactions(
