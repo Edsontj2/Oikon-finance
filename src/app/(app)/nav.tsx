@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeftRight, LayoutDashboard, Tags, Wallet } from "lucide-react";
+import { ArrowLeftRight, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Tags, Wallet } from "lucide-react";
 
 const items = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
@@ -11,6 +11,34 @@ const items = [
   { href: "/contas", label: "Contas", icon: Wallet },
   { href: "/categorias", label: "Categorias", icon: Tags },
 ];
+
+const PIN_KEY = "oikon:menu-fixo";
+
+/** Menu lateral fixado aberto ou retrátil (padrão). Fica guardado no navegador. */
+function usePinnedSidebar() {
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    try {
+      setPinned(localStorage.getItem(PIN_KEY) === "1");
+    } catch {
+      // Sem armazenamento: fica retrátil.
+    }
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.sidebar = pinned ? "pinned" : "auto";
+  }, [pinned]);
+  const toggle = () => {
+    setPinned((p) => {
+      try {
+        localStorage.setItem(PIN_KEY, p ? "0" : "1");
+      } catch {
+        // Sem armazenamento: vale só nesta visita.
+      }
+      return !p;
+    });
+  };
+  return { pinned, toggle };
+}
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -23,6 +51,7 @@ function isActive(pathname: string, href: string) {
 export function Navigation() {
   const pathname = usePathname();
   const [pending, setPending] = useState<string | null>(null);
+  const { pinned, toggle } = usePinnedSidebar();
   // Chegou na página (ou voltou pelo navegador): não há mais nada carregando.
   useEffect(() => setPending(null), [pathname]);
 
@@ -47,6 +76,10 @@ export function Navigation() {
             </Link>
           ))}
         </nav>
+        <button type="button" className="sidebar-pin" onClick={toggle} aria-pressed={pinned}>
+          {pinned ? <PanelLeftClose size={20} strokeWidth={1.75} aria-hidden /> : <PanelLeftOpen size={20} strokeWidth={1.75} aria-hidden />}
+          <span className="sidebar-label">{pinned ? "Recolher menu" : "Fixar menu aberto"}</span>
+        </button>
       </aside>
       <nav className="bottom-nav" aria-label="Navegação">
         {items.map(({ href, label, icon: Icon }) => (
