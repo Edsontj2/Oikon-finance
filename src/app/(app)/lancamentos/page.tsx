@@ -40,7 +40,8 @@ export default async function LancamentosPage({ searchParams }: { searchParams: 
       search: filters.busca,
       limit: shown,
     }),
-    filters.mes ? monthSummary(db, userId, filters.mes) : null,
+    // Com conta, tipo ou busca o resumo do mês inteiro não bateria com a lista: só aparece com o filtro de mês sozinho.
+    filters.mes && !filters.conta && !filters.tipo && !filters.busca ? monthSummary(db, userId, filters.mes) : null,
   ]);
 
   const now = currentMonth();

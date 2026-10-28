@@ -113,3 +113,28 @@ test("celular: sem rolagem lateral e campos com 16px (iPhone não dá zoom)", as
   expect(Math.min(...sizes)).toBeGreaterThanOrEqual(16);
   await ctx.close();
 });
+
+test("pagar antes do vencimento baixa o saldo na hora e os cartões do painel fecham", async ({ page }) => {
+  await signup(page);
+  const vencimento = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10);
+  await lancar(page, { tipo: "Entrada", descricao: "Salário", valor: "5000" });
+  await lancar(page, { descricao: "Aluguel", valor: "1800", data: vencimento, pago: false });
+  await page.getByTestId("lancamento").filter({ hasText: "Aluguel" }).getByRole("button", { name: /pendente · pagar/ }).click();
+  await expectToast(page, "Marcado como pago.");
+  await page.goto("/");
+  await expect(page.getByTestId("saldo-total")).toHaveAttribute("data-cents", "320000");
+  await expect(page.getByTestId("saidas-mes")).toHaveAttribute("data-cents", "-180000");
+});
+
+test("celular pequeno: 'Salvar lançamento' aparece sem rolar e tocar fora não apaga o que foi digitado", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 320, height: 568 }, isMobile: true, hasTouch: true, locale: "pt-BR" });
+  const page = await ctx.newPage();
+  await signup(page);
+  await page.goto("/lancamentos");
+  await page.getByRole("button", { name: "Novo lançamento" }).first().click();
+  await dialog(page).getByLabel("Descrição").fill("Farmácia");
+  await expect(dialog(page).getByRole("button", { name: "Salvar lançamento" })).toBeInViewport();
+  await page.mouse.click(160, 5);
+  await expect(dialog(page).getByLabel("Descrição")).toHaveValue("Farmácia");
+  await ctx.close();
+});

@@ -9,10 +9,13 @@ export type Insight = {
 };
 
 export type InsightInput = {
-  /** Mês exibido ("AAAA-MM") e se é o mês corrente. */
+  /** Mês exibido ("AAAA-MM") e se é o mês corrente ou um mês que ainda não começou. */
   month: string;
   isCurrentMonth: boolean;
+  isFutureMonth?: boolean;
   totalBalance: number;
+  /** Saldo total no fim do mês se tudo o que vence até lá for pago e recebido. */
+  endOfMonthBalance?: number;
   accounts: Array<{ name: string; type: string; balance: number }>;
   /** Do mês exibido: pago e pendente, em centavos. */
   income: number;
@@ -87,12 +90,26 @@ export function buildInsights(input: InsightInput): Insight[] {
   }
 
   if (input.isCurrentMonth && (input.pendingIncome > 0 || input.pendingExpense > 0)) {
-    const endOfMonth = input.totalBalance + input.pendingIncome - input.pendingExpense;
+    const endOfMonth = input.endOfMonthBalance ?? input.totalBalance + input.pendingIncome - input.pendingExpense;
     out.push(
       endOfMonth < 0
         ? { tone: "bad", title: `Previsão: ${monthName} termina no negativo`, detail: `Com os pendentes do mês, o saldo total fica em ${formatMoney(endOfMonth)}.` }
         : { tone: "info", title: `Previsão para o fim de ${monthName}: ${formatMoney(endOfMonth)}`, detail: "Saldo total se tudo o que está pendente no mês for pago e recebido." },
     );
+  }
+
+  if (input.isFutureMonth) {
+    // Mês que não começou: comparar com a média ou falar em "guardou" engana.
+    const planned = [
+      input.pendingExpense > 0 ? `${formatMoney(input.pendingExpense)} a pagar` : null,
+      input.pendingIncome > 0 ? `${formatMoney(input.pendingIncome)} a receber` : null,
+    ].filter(Boolean);
+    out.push({
+      tone: "info",
+      title: `${monthName[0].toUpperCase()}${monthName.slice(1)} ainda não começou`,
+      detail: planned.length ? `Já lançado para o mês: ${planned.join(" e ")}.` : "Nada lançado para este mês ainda.",
+    });
+    return finish(out);
   }
 
   const history = input.previousExpenses.filter((v) => v > 0);
@@ -120,7 +137,7 @@ export function buildInsights(input: InsightInput): Insight[] {
   if (grew) {
     out.push({
       tone: "info",
-      title: `${grew.name} cresceu este mês`,
+      title: input.isCurrentMonth ? `${grew.name} cresceu este mês` : `${grew.name} cresceu em ${monthName}`,
       detail: `${formatMoney(grew.monthTotal - Math.round(grew.previousAverage))} a mais que a média dos meses anteriores.`,
     });
   }
@@ -142,5 +159,9 @@ export function buildInsights(input: InsightInput): Insight[] {
     );
   }
 
+  return finish(out);
+}
+
+function finish(out: Insight[]): Insight[] {
   return out.sort((a, b) => order[a.tone] - order[b.tone]).slice(0, MAX_INSIGHTS);
 }

@@ -3,7 +3,7 @@ import type pg from "pg";
 import { createAccount, deleteAccount, listAccounts } from "@/data/accounts";
 import { createCategory, deleteCategory, listCategories } from "@/data/categories";
 import { getDashboard, monthSummary } from "@/data/dashboard";
-import { createTransaction, deleteTransaction, listTransactions, setPaid, type NewTransaction } from "@/data/transactions";
+import { createTransaction, deleteTransaction, listTransactions, searchTransactions, setPaid, type NewTransaction } from "@/data/transactions";
 import { authenticate, createUser, getUserName } from "@/data/users";
 import { UserError } from "@/data/errors";
 import { freshDb, newUser } from "./setup";
@@ -43,8 +43,9 @@ describe("virada de mês/ano", () => {
     const jan = await listTransactions(db, userId, { month: "2027-01" });
     expect(dez.map((t) => [t.description, t.date])).toEqual([["reveillon", "2026-12-31"]]);
     expect(jan.map((t) => [t.description, t.date])).toEqual([["ano novo", "2027-01-01"]]);
-    expect(await monthSummary(db, userId, "2026-12")).toMatchObject({ income: 0, expense: R(10) });
-    expect(await monthSummary(db, userId, "2027-01")).toMatchObject({ income: R(20), expense: 0 });
+    const depois = new Date("2027-02-01T12:00:00Z");
+    expect(await monthSummary(db, userId, "2026-12", depois)).toMatchObject({ income: 0, expense: R(10) });
+    expect(await monthSummary(db, userId, "2027-01", depois)).toMatchObject({ income: R(20), expense: 0 });
   });
 
   it("repetir a partir de 30/11 atravessa o ano (30/11, 30/12, 30/01)", async () => {
@@ -246,11 +247,30 @@ describe("pendente/pago - consistência", () => {
     expect((await balance(userId, contaId)).atual).toBe(R(900));
   });
 
-  it("pagar uma parcela futura da série afeta só ela", async () => {
+  it("pagar adiantado uma parcela futura: vira paga hoje, sai do saldo na hora e só ela muda", async () => {
     const { userId, contaId, tx } = await setup(1000);
     const ids = await tx({ type: "expense", amount: R(100), repeat: 3 });
-    await setPaid(db, userId, ids[2], true);
-    // A parcela de dezembro foi marcada como paga, mas só sai do saldo atual quando a data chegar.
+    await setPaid(db, userId, ids[2], true, HOJE);
+    expect(await balance(userId, contaId)).toEqual({ atual: R(800), previsto: R(700) });
+    const datas = (await searchTransactions(db, userId, {})).items.map((t) => [t.date, t.paid]).sort();
+    expect(datas).toEqual([
+      ["2026-10-10", true],
+      ["2026-10-27", true],
+      ["2026-11-10", false],
+    ]);
+    // Voltar para pendente não mexe na data.
+    await setPaid(db, userId, ids[2], false, HOJE);
     expect(await balance(userId, contaId)).toEqual({ atual: R(900), previsto: R(700) });
+  });
+
+  it("pago com data futura não entra em 'saídas pagas' do mês: os cartões do painel fecham com o saldo", async () => {
+    const { userId, tx } = await setup(1000);
+    await tx({ type: "income", amount: R(5000) });
+    await tx({ type: "expense", amount: R(1800), date: "2026-10-30", paid: true });
+    const d = await getDashboard(db, userId, "2026-10", HOJE);
+    expect(d.month).toEqual({ income: R(5000), expense: 0, pendingIncome: 0, pendingExpense: R(1800) });
+    // saldo inicial + resultado do mês = saldo total hoje
+    expect(R(1000) + d.month.income - d.month.expense).toBe(d.totalBalance);
+    expect(d.insights.map((i) => i.title)).toContain("Previsão para o fim de outubro: R$\u00a04.200,00");
   });
 });

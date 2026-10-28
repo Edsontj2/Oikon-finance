@@ -20,7 +20,7 @@ export function ConfirmDialog({
   children: React.ReactNode;
 }) {
   return (
-    <Modal open={open} onClose={onClose} title={title}>
+    <Modal open={open} onClose={onClose} title={title} dismissible>
       <p className="confirm-text">{message}</p>
       <FormError message={error ?? null} />
       <div className="modal-actions">

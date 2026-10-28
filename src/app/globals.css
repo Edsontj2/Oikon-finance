@@ -254,7 +254,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .status {
   all: unset; box-sizing: border-box; cursor: pointer; flex-shrink: 0;
   display: inline-flex; align-items: center; gap: 0.25rem;
-  font-size: 0.75rem; font-weight: 500; padding: 0.3rem 0.6rem; border-radius: 999px; border: 1px solid;
+  font-size: 0.78rem; font-weight: 500; min-height: 36px; padding: 0 0.75rem; border-radius: 999px; border: 1px solid;
 }
 .status:disabled { opacity: 0.5; cursor: progress; }
 .status-paid { color: var(--success); background: color-mix(in oklab, var(--success) 10%, transparent); border-color: color-mix(in oklab, var(--success) 30%, transparent); }
@@ -381,17 +381,25 @@ button { font: inherit; color: inherit; }
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.75rem 0.5rem 1.25rem; }
 .modal-head h2 { margin: 0; font-size: 1.1rem; }
-.modal-body { padding: 0.5rem 1.25rem 1.25rem; overflow-y: auto; overscroll-behavior: contain; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; flex-wrap: wrap; }
+.modal-body { padding: 0.5rem 1.25rem 0; overflow-y: auto; overscroll-behavior: contain; }
+/* Os botões ficam presos no pé da janela: "Salvar" nunca some abaixo da tela. */
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 0.6rem; flex-wrap: wrap;
+  position: sticky; bottom: 0; z-index: 1;
+  margin: 0 -1.25rem; padding: 0.75rem 1.25rem calc(0.75rem + var(--safe-bottom));
+  background: rgba(28, 26, 24, 0.92); border-top: 1px solid var(--glass-border);
+  border-radius: 0 0 24px 24px;
+}
 .modal-actions .btn { flex: 1 1 auto; }
 @media (min-width: 520px) { .modal-actions .btn { flex: 0 0 auto; } }
-.danger-zone { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.danger-zone { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem; margin: 1.25rem 0; padding-top: 1rem; border-top: 1px solid var(--border); }
 .confirm-text { margin-bottom: 1rem; color: var(--muted); }
 .confirm-text strong { color: var(--foreground); }
 @media (max-width: 519px) {
   /* No celular a janela sobe de baixo e ocupa a largura toda. */
   .modal { width: 100vw; margin: auto 0 0; max-height: 94dvh; }
-  .modal-box { border-radius: 24px 24px 0 0; max-height: 94dvh; padding-bottom: var(--safe-bottom); border-bottom: 0; }
+  .modal-box { border-radius: 24px 24px 0 0; max-height: 94dvh; border-bottom: 0; }
+  .modal-actions { border-radius: 0; }
 }
 
 /* ---------- Avisos ---------- */

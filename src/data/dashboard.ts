@@ -5,16 +5,23 @@ import { listAccounts, type AccountWithBalance } from "./accounts";
 import { listCategories, type Category } from "./categories";
 import { listTransactions, type Transaction } from "./transactions";
 
+/**
+ * "Pago" aqui é o que já mexeu no saldo: marcado como pago E com data até hoje (a mesma regra
+ * do saldo das contas). Pago com data futura conta como pendente até o dia chegar.
+ */
 export type MonthSummary = {
-  /** Entradas do mês marcadas como recebidas. */
+  /** Entradas do mês já recebidas. */
   income: number;
-  /** Saídas do mês marcadas como pagas. */
+  /** Saídas do mês já pagas. */
   expense: number;
-  /** Entradas do mês ainda não recebidas. */
+  /** Entradas do mês ainda por receber. */
   pendingIncome: number;
-  /** Saídas do mês ainda não pagas. */
+  /** Saídas do mês ainda por pagar. */
   pendingExpense: number;
 };
+
+/** Condição SQL de "já mexeu no saldo"; `todayParam` é o parâmetro ($n) com a data de hoje. */
+const settled = (alias: string, todayParam: string) => `(${alias}paid AND ${alias}date <= ${todayParam}::date)`;
 
 export type Dashboard = {
   totalBalance: number;
@@ -30,17 +37,18 @@ export type Dashboard = {
 };
 
 /** Transferências não entram: só mudam o dinheiro de lugar, não são ganho nem gasto. */
-export async function monthSummary(db: Db, userId: string, month: string): Promise<MonthSummary> {
+export async function monthSummary(db: Db, userId: string, month: string, now = new Date()): Promise<MonthSummary> {
   const { start, end } = monthRange(month);
+  const done = settled("", "$4");
   const { rows } = await db.query(
     `SELECT
-       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'income'  AND paid), 0)     AS income,
-       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense' AND paid), 0)     AS expense,
-       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'income'  AND NOT paid), 0) AS pending_income,
-       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense' AND NOT paid), 0) AS pending_expense
+       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'income'  AND ${done}), 0)     AS income,
+       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense' AND ${done}), 0)     AS expense,
+       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'income'  AND NOT ${done}), 0) AS pending_income,
+       COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense' AND NOT ${done}), 0) AS pending_expense
      FROM transactions
      WHERE user_id = $1 AND date >= $2 AND date < $3`,
-    [userId, start, end],
+    [userId, start, end, today(now)],
   );
   const r = rows[0];
   return {
@@ -76,14 +84,30 @@ async function overdueAndDueSoon(db: Db, userId: string, todayStr: string) {
   };
 }
 
-async function uncategorizedExpense(db: Db, userId: string, month: string) {
-  const { start, end } = monthRange(month);
+/**
+ * Saldo total no fim do mês se tudo o que vence até lá for pago e recebido: o que já mexeu
+ * no saldo + todos os lançamentos com data até o fim do mês (inclusive atrasados de antes).
+ */
+async function endOfMonthBalance(db: Db, userId: string, month: string, todayStr: string): Promise<number> {
+  const { end } = monthRange(month);
   const { rows } = await db.query(
-    `SELECT COALESCE(SUM(amount_cents) FILTER (WHERE paid), 0) AS paid,
-            COALESCE(SUM(amount_cents) FILTER (WHERE NOT paid), 0) AS pending
+    `SELECT (SELECT COALESCE(SUM(initial_balance_cents), 0) FROM accounts WHERE user_id = $1)
+          + (SELECT COALESCE(SUM(delta), 0) FROM transaction_effects
+              WHERE user_id = $1 AND ((paid AND date <= $3::date) OR date < $2)) AS total`,
+    [userId, end, todayStr],
+  );
+  return num(rows[0].total);
+}
+
+async function uncategorizedExpense(db: Db, userId: string, month: string, todayStr: string) {
+  const { start, end } = monthRange(month);
+  const done = settled("", "$4");
+  const { rows } = await db.query(
+    `SELECT COALESCE(SUM(amount_cents) FILTER (WHERE ${done}), 0) AS paid,
+            COALESCE(SUM(amount_cents) FILTER (WHERE NOT ${done}), 0) AS pending
        FROM transactions
       WHERE user_id = $1 AND type = 'expense' AND category_id IS NULL AND date >= $2 AND date < $3`,
-    [userId, start, end],
+    [userId, start, end, todayStr],
   );
   return { paidTotal: num(rows[0].paid), pendingTotal: num(rows[0].pending) };
 }
@@ -106,14 +130,15 @@ async function expenseHistory(db: Db, userId: string, month: string) {
 
 export async function getDashboard(db: Db, userId: string, month: string, now = new Date()): Promise<Dashboard> {
   const todayStr = today(now);
-  const [accounts, summary, pending, categories, uncategorized, recent, history] = await Promise.all([
+  const [accounts, summary, pending, categories, uncategorized, recent, history, endOfMonth] = await Promise.all([
     listAccounts(db, userId, now),
-    monthSummary(db, userId, month),
+    monthSummary(db, userId, month, now),
     overdueAndDueSoon(db, userId, todayStr),
-    listCategories(db, userId, month),
-    uncategorizedExpense(db, userId, month),
+    listCategories(db, userId, month, now),
+    uncategorizedExpense(db, userId, month, todayStr),
     listTransactions(db, userId, { month, limit: 8 }),
     expenseHistory(db, userId, month),
+    endOfMonthBalance(db, userId, month, todayStr),
   ]);
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
   const expenseCategories = categories.filter((c) => c.kind === "expense");
@@ -121,7 +146,9 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
   const insights = buildInsights({
     month,
     isCurrentMonth: month === currentMonth(now),
+    isFutureMonth: month > currentMonth(now),
     totalBalance,
+    endOfMonthBalance: endOfMonth,
     accounts,
     ...summary,
     overdue: pending.overdue,

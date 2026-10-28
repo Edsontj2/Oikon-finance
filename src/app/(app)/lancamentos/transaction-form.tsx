@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { AccountOption } from "@/domain/accounts";
 import type { CategoryOption } from "@/domain/categories";
 import { MAX_REPEAT, type Transaction, type TransactionType } from "@/domain/transactions";
-import { today } from "@/lib/dates";
+import { formatDate, today } from "@/lib/dates";
 import { MoneyInput } from "@/components/money-input";
 import { FormError } from "@/components/form-error";
 import { useServerAction } from "@/components/use-server-action";
@@ -17,6 +17,26 @@ const paidLabels: Record<TransactionType, string> = {
   income: "Já foi recebido",
   transfer: "Já foi feita",
 };
+
+const LAST_ACCOUNT_KEY = "oikon:ultima-conta";
+
+/** A conta usada no último lançamento (só uma conveniência: se o navegador não guardar, usa a primeira). */
+function lastAccount(accounts: AccountOption[]): string | undefined {
+  try {
+    const id = localStorage.getItem(LAST_ACCOUNT_KEY);
+    return accounts.some((a) => a.id === id) ? id ?? undefined : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberAccount(id: string) {
+  try {
+    localStorage.setItem(LAST_ACCOUNT_KEY, id);
+  } catch {
+    // Sem armazenamento (aba anônima, por exemplo): só não lembra.
+  }
+}
 
 /** Formulário de lançamento: o mesmo para criar (sem `transaction`) e editar. */
 export function TransactionForm({
@@ -35,12 +55,15 @@ export function TransactionForm({
   const editing = Boolean(transaction);
   const [submissionKey] = useState(() => crypto.randomUUID());
   const [type, setType] = useState<TransactionType>(transaction?.type ?? "expense");
-  const [accountId, setAccountId] = useState(transaction?.accountId ?? accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(() => transaction?.accountId ?? lastAccount(accounts) ?? accounts[0]?.id ?? "");
   const [date, setDate] = useState(transaction?.date ?? today());
   const [paid, setPaid] = useState(transaction?.paid ?? true);
   const [paidTouched, setPaidTouched] = useState(editing);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
-  const { run, pending, error } = useServerAction(saveTransaction, onDone);
+  const { run, pending, error } = useServerAction(saveTransaction, () => {
+    rememberAccount(accountId);
+    onDone();
+  });
 
   const isTransfer = type === "transfer";
   const categoryOptions = categories.filter((c) => c.kind === type);
@@ -144,6 +167,9 @@ export function TransactionForm({
         />
         {paidLabels[type]}
         {!paid && <span className="hint">(fica como pendente e não mexe no saldo atual)</span>}
+        {paid && date > today() && (
+          <span className="hint">Data no futuro: só sai do saldo em {formatDate(date)}. Se já pagou, use a data de hoje.</span>
+        )}
       </label>
 
       {!editing && (

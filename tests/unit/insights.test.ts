@@ -67,6 +67,16 @@ describe("análise do painel", () => {
     expect(titles({ income: 100000, expense: 120000 })).toContain("bad: Saídas pagas maiores que as entradas");
   });
 
+  it("mês que ainda não começou: não compara com a média nem fala em 'guardou'", () => {
+    const out = titles({ isCurrentMonth: false, isFutureMonth: true, month: "2026-11", pendingExpense: 20000, previousExpenses: [100000, 0, 0] });
+    expect(out).toEqual(["info: Novembro ainda não começou"]);
+    expect(buildInsights({ ...base, isCurrentMonth: false, isFutureMonth: true, month: "2026-11", pendingExpense: 20000 })[0].detail).toContain("a pagar");
+  });
+
+  it("previsão usa o saldo do fim do mês calculado no banco quando vem pronto", () => {
+    expect(titles({ pendingExpense: 1000, expense: 1, endOfMonthBalance: -500 })).toContain("bad: Previsão: outubro termina no negativo");
+  });
+
   it("no máximo 5, graves primeiro", () => {
     const out = buildInsights({
       ...base,

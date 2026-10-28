@@ -3,37 +3,51 @@
 import { readdir, readFile } from "node:fs/promises";
 
 const MIGRATIONS_DIR = new URL("../db/migrations/", import.meta.url);
-// Trava para duas execuções simultâneas não aplicarem a mesma migração.
+// Trava para duas execuções simultâneas não aplicarem a mesma migração. É uma trava de
+// transação (some no COMMIT/ROLLBACK), então funciona também pela conexão com pooler do Neon.
 const LOCK_ID = 4815162342;
 
 /** @param {import("pg").ClientBase} client */
 export async function runMigrations(client, log = () => {}) {
-  await client.query("SELECT pg_advisory_lock($1)", [LOCK_ID]);
-  try {
+  await inLockedTransaction(client, async () => {
     await assertNoForeignTables(client);
     await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
       version    text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     )`);
-    const done = new Set((await client.query("SELECT version FROM schema_migrations")).rows.map((r) => r.version));
-    const files = (await readdir(MIGRATIONS_DIR)).filter((f) => /^\d{4}_.+\.sql$/.test(f)).sort();
-    for (const file of files) {
-      const version = file.replace(/\.sql$/, "");
-      if (done.has(version)) continue;
-      const sql = await readFile(new URL(file, MIGRATIONS_DIR), "utf8");
-      await client.query("BEGIN");
-      try {
+  });
+  const files = (await readdir(MIGRATIONS_DIR)).filter((f) => /^\d{4}_.+\.sql$/.test(f)).sort();
+  for (const file of files) {
+    const version = file.replace(/\.sql$/, "");
+    const sql = await readFile(new URL(file, MIGRATIONS_DIR), "utf8");
+    try {
+      const applied = await inLockedTransaction(client, async () => {
+        // Conferido já com a trava: outra execução pode ter aplicado enquanto esperávamos.
+        const { rows } = await client.query("SELECT 1 FROM schema_migrations WHERE version = $1", [version]);
+        if (rows.length) return false;
         await client.query(sql);
         await client.query("INSERT INTO schema_migrations (version) VALUES ($1)", [version]);
-        await client.query("COMMIT");
-        log(`aplicada ${version}`);
-      } catch (err) {
-        await client.query("ROLLBACK");
-        throw new Error(`Falha na migração ${version}: ${err.message}`);
-      }
+        return true;
+      });
+      if (applied) log(`aplicada ${version}`);
+    } catch (err) {
+      throw new Error(`Falha na migração ${version}: ${err.message}`);
     }
-  } finally {
-    await client.query("SELECT pg_advisory_unlock($1)", [LOCK_ID]);
+  }
+}
+
+/** Roda `fn` numa transação com a trava; não espera para sempre por tabelas ocupadas. */
+async function inLockedTransaction(client, fn) {
+  await client.query("BEGIN");
+  try {
+    await client.query("SET LOCAL lock_timeout = '60s'");
+    await client.query("SELECT pg_advisory_xact_lock($1)", [LOCK_ID]);
+    const result = await fn();
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
   }
 }
 

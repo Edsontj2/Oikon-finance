@@ -1,5 +1,5 @@
 import { num, type Db } from "@/lib/db";
-import { monthRange } from "@/lib/dates";
+import { monthRange, today } from "@/lib/dates";
 import { UserError, assertUuid, pgCode, submissionKey, toUserError, validateOnce } from "./errors";
 import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
@@ -13,19 +13,20 @@ import {
 
 export { categoryKinds, isCategoryKind, type Category, type CategoryKind, type CategoryOption };
 
-export async function listCategories(db: Db, userId: string, month: string): Promise<Category[]> {
+/** Totais do mês por categoria; "pago" é o que já mexeu no saldo (pago e com data até hoje). */
+export async function listCategories(db: Db, userId: string, month: string, now = new Date()): Promise<Category[]> {
   const { start, end } = monthRange(month);
   const { rows } = await db.query(
     `SELECT c.id, c.name, c.kind, c.monthly_limit_cents,
-            COALESCE(SUM(t.amount_cents) FILTER (WHERE t.paid), 0) AS paid_total,
-            COALESCE(SUM(t.amount_cents) FILTER (WHERE NOT t.paid), 0) AS pending_total
+            COALESCE(SUM(t.amount_cents) FILTER (WHERE t.paid AND t.date <= $4::date), 0) AS paid_total,
+            COALESCE(SUM(t.amount_cents) FILTER (WHERE NOT (t.paid AND t.date <= $4::date)), 0) AS pending_total
        FROM categories c
        LEFT JOIN transactions t
               ON t.category_id = c.id AND t.date >= $2 AND t.date < $3
       WHERE c.user_id = $1
       GROUP BY c.id
       ORDER BY CASE c.kind WHEN 'expense' THEN 0 ELSE 1 END, c.name`,
-    [userId, start, end],
+    [userId, start, end, today(now)],
   );
   return rows.map((r) => ({
     id: r.id,

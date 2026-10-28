@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { num, type Db } from "@/lib/db";
-import { addMonths, isValidDate, monthRange } from "@/lib/dates";
+import { addMonths, isValidDate, monthRange, today } from "@/lib/dates";
 import { UserError, assertUuid, isUuid, submissionKey, toUserError } from "./errors";
 import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
@@ -203,7 +203,7 @@ export async function searchTransactions(
     db.query(
       `SELECT ${selectColumns}
         WHERE ${where}
-        ORDER BY t.date DESC, t.created_at DESC
+        ORDER BY t.date DESC, t.created_at DESC, t.id
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset],
     ),
@@ -240,13 +240,18 @@ function mapTransaction(r: Record<string, unknown>): Transaction {
 }
 
 /** Marca como pago/recebido ou volta para pendente. */
-export async function setPaid(db: Db, userId: string, transactionId: string, paid: boolean): Promise<void> {
+/**
+ * Marca como pago ou pendente. Pagar antes da data quer dizer que foi pago hoje: a data vira
+ * hoje e o valor sai do saldo na hora (senão o saldo só mudaria no dia do vencimento).
+ */
+export async function setPaid(db: Db, userId: string, transactionId: string, paid: boolean, now = new Date()): Promise<void> {
   assertUuid(transactionId, "Lançamento não encontrado.");
-  const { rowCount } = await db.query("UPDATE transactions SET paid = $3 WHERE id = $1 AND user_id = $2", [
-    transactionId,
-    userId,
-    paid === true,
-  ]);
+  const { rowCount } = await db.query(
+    `UPDATE transactions
+        SET paid = $3, date = CASE WHEN $3 THEN LEAST(date, $4::date) ELSE date END
+      WHERE id = $1 AND user_id = $2`,
+    [transactionId, userId, paid === true, today(now)],
+  );
   if (!rowCount) throw new UserError("Lançamento não encontrado.");
 }
 
