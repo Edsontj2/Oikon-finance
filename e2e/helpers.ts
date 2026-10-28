@@ -48,6 +48,9 @@ export type Lancamento = {
   data?: string;
   pago?: boolean;
   repetir?: number;
+  parcelas?: number;
+  /** Com `parcelas`: o valor digitado é o de cada parcela (padrão: total da compra). */
+  valorPorParcela?: boolean;
 };
 
 /** Preenche o formulário de lançamento da janela aberta (não envia). */
@@ -62,8 +65,13 @@ export async function preencherLancamento(page: Page, l: Lancamento) {
   if (l.categoria) await d.locator("[name=categoryId]").selectOption({ label: l.categoria });
   if (l.pago !== undefined) await d.locator("[name=paid]").setChecked(l.pago);
   if (l.repetir) {
-    await d.getByLabel("Repetir todo mês").check();
+    await d.getByRole("radio", { name: "Todo mês" }).click();
     await d.getByLabel("Por quantos meses?").fill(String(l.repetir));
+  }
+  if (l.parcelas) {
+    await d.getByRole("radio", { name: "Parcelado" }).click();
+    await d.getByLabel("Número de parcelas").fill(String(l.parcelas));
+    if (l.valorPorParcela) await d.getByLabel("O valor digitado é").selectOption("installment");
   }
 }
 

@@ -11,6 +11,8 @@ import type { Insight } from "@/domain/insights";
 import { Money } from "@/components/money";
 import { MonthNav } from "@/components/month-nav";
 import { LimitBar } from "./categorias/limit-bar";
+import { InstallmentsCard, PaceCard } from "./dashboard-cards";
+import { FlowChart } from "./flow-chart";
 
 const insightIcons: Record<Insight["tone"], typeof Info> = {
   bad: CircleAlert,
@@ -24,6 +26,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
   const month = monthParam(await searchParams);
   const d = await getDashboard(getDb(), userId, month);
   const result = d.month.income - d.month.expense;
+  const isCurrentMonth = month === d.today.slice(0, 7);
   const categoryRows = [
     ...d.expenseCategories,
     ...(d.uncategorized.paidTotal + d.uncategorized.pendingTotal > 0
@@ -37,24 +40,6 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
         <h1>Painel</h1>
       </div>
       <MonthNav month={month} path="/" />
-
-      <section className="card insights" aria-labelledby="insights-title">
-        <h2 id="insights-title"><Sparkles size={18} aria-hidden /> Análise de {formatMonth(month).split(" de ")[0]}</h2>
-        <ul>
-          {d.insights.map((insight, i) => {
-            const Icon = insightIcons[insight.tone];
-            return (
-              <li key={i} className={`insight insight-${insight.tone}`}>
-                <Icon size={18} aria-hidden />
-                <div>
-                  <strong>{insight.title}</strong>
-                  {insight.detail && <span>{insight.detail}</span>}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
 
       <div className="grid">
         <div className="card stat">
@@ -76,6 +61,31 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
           <div className="value"><Money cents={result} signed testId="resultado-mes" /></div>
         </div>
       </div>
+
+      <section className="card insights" aria-labelledby="insights-title">
+        <h2 id="insights-title"><Sparkles size={18} aria-hidden /> Análise de {formatMonth(month).split(" de ")[0]}</h2>
+        <ul>
+          {d.insights.map((insight, i) => {
+            const Icon = insightIcons[insight.tone];
+            return (
+              <li key={i} className={`insight insight-${insight.tone}`}>
+                <Icon size={18} aria-hidden />
+                <div>
+                  <strong>{insight.title}</strong>
+                  {insight.detail && <span>{insight.detail}</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <div className={isCurrentMonth ? "grid grid-2" : undefined}>
+        {isCurrentMonth && <PaceCard today={d.today} month={d.month} />}
+        <InstallmentsCard items={d.installments} />
+      </div>
+
+      <FlowChart flow={d.flow} />
 
       <div className="grid grid-2">
         <section className="card">

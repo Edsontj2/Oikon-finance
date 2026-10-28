@@ -23,6 +23,23 @@ export type MonthSummary = {
 /** Condição SQL de "já mexeu no saldo"; `todayParam` é o parâmetro ($n) com a data de hoje. */
 const settled = (alias: string, todayParam: string) => `(${alias}paid AND ${alias}date <= ${todayParam}::date)`;
 
+/** Uma compra parcelada que ainda tem parcelas por pagar. */
+export type OpenInstallment = {
+  seriesId: string;
+  description: string;
+  count: number;
+  /** Parcelas que já saíram do saldo. */
+  settledCount: number;
+  /** Valor da próxima parcela e quanto falta no total, em centavos. */
+  nextAmount: number;
+  remaining: number;
+  nextDate: string;
+  lastDate: string;
+};
+
+/** Entradas e saídas lançadas num mês (pagas e pendentes; transferências não entram). */
+export type MonthFlow = { month: string; income: number; expense: number };
+
 export type Dashboard = {
   totalBalance: number;
   accounts: AccountWithBalance[];
@@ -34,6 +51,11 @@ export type Dashboard = {
   uncategorized: { paidTotal: number; pendingTotal: number };
   recent: Transaction[];
   insights: Insight[];
+  installments: OpenInstallment[];
+  /** Os 6 meses que terminam no mês exibido, do mais antigo ao mais novo. */
+  flow: MonthFlow[];
+  /** Hoje ("AAAA-MM-DD"), para as métricas de ritmo do mês corrente. */
+  today: string;
 };
 
 /** Transferências não entram: só mudam o dinheiro de lugar, não são ganho nem gasto. */
@@ -99,6 +121,53 @@ async function endOfMonthBalance(db: Db, userId: string, month: string, todayStr
   return num(rows[0].total);
 }
 
+/** Compras parceladas (saídas) com parcelas ainda por pagar, as que terminam antes primeiro. */
+async function openInstallments(db: Db, userId: string, todayStr: string): Promise<OpenInstallment[]> {
+  const { rows } = await db.query(
+    `SELECT series_id,
+            (array_agg(description ORDER BY installment_number))[1] AS description,
+            max(installment_count) AS count,
+            count(*) FILTER (WHERE paid AND date <= $2::date) AS settled_count,
+            (array_agg(amount_cents ORDER BY date) FILTER (WHERE NOT (paid AND date <= $2::date)))[1] AS next_amount,
+            SUM(amount_cents) FILTER (WHERE NOT (paid AND date <= $2::date)) AS remaining,
+            to_char(min(date) FILTER (WHERE NOT (paid AND date <= $2::date)), 'YYYY-MM-DD') AS next_date,
+            to_char(max(date), 'YYYY-MM-DD') AS last_date
+       FROM transactions
+      WHERE user_id = $1 AND type = 'expense' AND installment_count IS NOT NULL
+      GROUP BY series_id
+     HAVING count(*) FILTER (WHERE NOT (paid AND date <= $2::date)) > 0
+      ORDER BY max(date), 2`,
+    [userId, todayStr],
+  );
+  return rows.map((r) => ({
+    seriesId: r.series_id,
+    description: r.description,
+    count: num(r.count),
+    settledCount: num(r.settled_count),
+    nextAmount: num(r.next_amount),
+    remaining: num(r.remaining),
+    nextDate: r.next_date,
+    lastDate: r.last_date,
+  }));
+}
+
+async function monthlyFlow(db: Db, userId: string, month: string): Promise<MonthFlow[]> {
+  const months = [5, 4, 3, 2, 1, 0].map((n) => shiftMonth(month, -n));
+  const { rows } = await db.query(
+    `SELECT to_char(date, 'YYYY-MM') AS month,
+            COALESCE(SUM(amount_cents) FILTER (WHERE type = 'income'), 0) AS income,
+            COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense'), 0) AS expense
+       FROM transactions
+      WHERE user_id = $1 AND date >= $2 AND date < $3
+      GROUP BY 1`,
+    [userId, `${months[0]}-01`, monthRange(month).end],
+  );
+  return months.map((m) => {
+    const r = rows.find((x) => x.month === m);
+    return { month: m, income: r ? num(r.income) : 0, expense: r ? num(r.expense) : 0 };
+  });
+}
+
 async function uncategorizedExpense(db: Db, userId: string, month: string, todayStr: string) {
   const { start, end } = monthRange(month);
   const done = settled("", "$4");
@@ -130,7 +199,7 @@ async function expenseHistory(db: Db, userId: string, month: string) {
 
 export async function getDashboard(db: Db, userId: string, month: string, now = new Date()): Promise<Dashboard> {
   const todayStr = today(now);
-  const [accounts, summary, pending, categories, uncategorized, recent, history, endOfMonth] = await Promise.all([
+  const [accounts, summary, pending, categories, uncategorized, recent, history, endOfMonth, installments, flow] = await Promise.all([
     listAccounts(db, userId, now),
     monthSummary(db, userId, month, now),
     overdueAndDueSoon(db, userId, todayStr),
@@ -139,6 +208,8 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
     listTransactions(db, userId, { month, limit: 8 }),
     expenseHistory(db, userId, month),
     endOfMonthBalance(db, userId, month, todayStr),
+    openInstallments(db, userId, todayStr),
+    monthlyFlow(db, userId, month),
   ]);
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
   const expenseCategories = categories.filter((c) => c.kind === "expense");
@@ -147,6 +218,9 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
     month,
     isCurrentMonth: month === currentMonth(now),
     isFutureMonth: month > currentMonth(now),
+    installmentsEnding: installments
+      .filter((i) => i.lastDate.startsWith(month))
+      .map((i) => ({ description: i.description, amount: i.nextAmount })),
     totalBalance,
     endOfMonthBalance: endOfMonth,
     accounts,
@@ -171,5 +245,8 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
     uncategorized,
     recent,
     insights,
+    installments,
+    flow,
+    today: todayStr,
   };
 }

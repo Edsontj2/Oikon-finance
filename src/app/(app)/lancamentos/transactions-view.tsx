@@ -133,7 +133,13 @@ function TransactionRow({ t, todayStr, onOpen }: { t: Transaction; todayStr: str
         <span className="row-text">
           <span className="row-title">
             {t.description}
-            {t.seriesId && <Repeat size={13} className="row-icon" aria-label="mensal" />}
+            {t.installmentCount ? (
+              <span className="tag tag-installment" title={`Parcela ${t.installmentNumber} de ${t.installmentCount}`}>
+                {t.installmentNumber}/{t.installmentCount}
+              </span>
+            ) : (
+              t.seriesId && <Repeat size={13} className="row-icon" aria-label="mensal" />
+            )}
           </span>
           <span className="row-sub">{details.join(" · ")}</span>
         </span>

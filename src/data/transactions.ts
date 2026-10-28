@@ -6,6 +6,7 @@ import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
 import {
   MAX_REPEAT,
+  installmentPlan,
   isTransactionType,
   transactionTypes,
   type Transaction,
@@ -30,6 +31,10 @@ export type TransactionInput = {
 export type NewTransaction = TransactionInput & {
   /** Quantas vezes lançar, uma por mês (1 = só este mês). */
   repeat?: number;
+  /** Compra parcelada em N vezes (não junto com `repeat`). */
+  installments?: number;
+  /** Com `installments`: o valor informado é o total da compra (senão, é o de cada parcela). */
+  amountIsTotal?: boolean;
   /** Chave única do envio do formulário; reenviar a mesma chave não lança de novo. */
   submissionKey?: string | null;
 };
@@ -88,35 +93,69 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > MAX_REPEAT) {
     throw new UserError(`Repetir deve ser entre 1 e ${MAX_REPEAT} meses.`);
   }
-
-  const seriesId = repeat > 1 ? randomUUID() : null;
-  const dates = seriesDates(tx.date, repeat);
-  // Só a primeira ocorrência herda "pago"; as dos próximos meses ficam pendentes.
-  const paid = dates.map((_, i) => (i === 0 ? tx.paid : false));
+  const rows = input.installments === undefined ? repeatRows(tx, repeat) : await installmentRows(db, userId, tx, input);
+  const seriesId = rows.dates.length > 1 ? randomUUID() : null;
 
   try {
     // Um único comando: grava a chave do formulário e os lançamentos juntos.
     // Se a chave já foi usada (duplo clique, reenvio), nada é lançado e devolve [].
-    const { rows } = await db.query<{ id: string }>(
+    const { rows: inserted } = await db.query<{ id: string }>(
       `WITH claim AS (
          INSERT INTO form_submissions (user_id, key) SELECT $1, $11::uuid WHERE $11::uuid IS NOT NULL
          ON CONFLICT DO NOTHING RETURNING 1
        )
        INSERT INTO transactions
-         (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id)
-       SELECT $1, $2, $3, $4, d.date, d.paid, $5, $6, $7, $8
-         FROM unnest($9::date[], $10::boolean[]) AS d(date, paid)
+         (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id,
+          installment_number, installment_count)
+       SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12
+         FROM unnest($8::date[], $9::boolean[], $10::bigint[], $13::smallint[]) AS d(date, paid, amount, number)
         WHERE $11::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
        RETURNING id`,
       [
-        userId, tx.type, tx.description, tx.amount, tx.accountId, tx.toAccountId, tx.categoryId, seriesId,
-        dates, paid, submissionKey(input.submissionKey),
+        userId, tx.type, tx.description, tx.accountId, tx.toAccountId, tx.categoryId, seriesId,
+        rows.dates, rows.paid, rows.amounts, submissionKey(input.submissionKey),
+        rows.numbers ? rows.dates.length : null, rows.numbers ?? rows.dates.map(() => null),
       ],
     );
-    return rows.map((r) => r.id);
+    return inserted.map((r) => r.id);
   } catch (err) {
     throw toUserError(err);
   }
+}
+
+type NewRows = { dates: string[]; paid: boolean[]; amounts: number[]; numbers?: number[] };
+
+/** "Repetir todo mês": mesmo valor; só a primeira herda "pago", as dos próximos meses ficam pendentes. */
+function repeatRows(tx: ValidTransaction, repeat: number): NewRows {
+  const dates = seriesDates(tx.date, repeat);
+  return { dates, paid: dates.map((_, i) => i === 0 && tx.paid), amounts: dates.map(() => tx.amount) };
+}
+
+/**
+ * Compra parcelada. No cartão de crédito cada parcela já fica paga com a data dela (entra na
+ * fatura sozinha no mês certo); em outras contas (carnê, boleto) as próximas ficam pendentes.
+ */
+async function installmentRows(db: Db, userId: string, tx: ValidTransaction, input: NewTransaction): Promise<NewRows> {
+  const count = input.installments;
+  if (tx.type === "transfer") throw new UserError("Transferência não pode ser parcelada.");
+  if (input.repeat !== undefined && input.repeat !== 1) throw new UserError("Escolha parcelado ou repetir, não os dois.");
+  if (!Number.isInteger(count) || count! < 2 || count! > MAX_REPEAT) {
+    throw new UserError(`Parcelas devem ser entre 2 e ${MAX_REPEAT}.`);
+  }
+  const plan = installmentPlan(tx.date, count!, tx.amount, input.amountIsTotal === true);
+  if (plan.amounts.some((a) => a <= 0)) throw new UserError("O total é pequeno demais para tantas parcelas.");
+  if (plan.amounts.some((a) => !isValidCents(a))) throw new UserError(TOO_BIG);
+  const { rows } = await db.query<{ type: string }>("SELECT type FROM accounts WHERE id = $1 AND user_id = $2", [
+    tx.accountId,
+    userId,
+  ]);
+  const onCard = rows[0]?.type === "credit_card";
+  return {
+    dates: plan.dates,
+    amounts: plan.amounts,
+    paid: plan.dates.map((_, i) => onCard || (i === 0 && tx.paid)),
+    numbers: plan.dates.map((_, i) => i + 1),
+  };
 }
 
 /** Edita um lançamento (só ele; os outros meses de uma série não mudam). */
@@ -182,7 +221,7 @@ function buildFilter(userId: string, filter: TransactionFilter) {
 const selectColumns = `
   t.id, t.type, t.description, t.amount_cents, to_char(t.date, 'YYYY-MM-DD') AS date, t.paid,
   t.account_id, a.name AS account_name, t.to_account_id, ta.name AS to_account_name,
-  t.category_id, c.name AS category_name, t.series_id
+  t.category_id, c.name AS category_name, t.series_id, t.installment_number, t.installment_count
   FROM transactions t
   JOIN accounts a ON a.id = t.account_id
   LEFT JOIN accounts ta ON ta.id = t.to_account_id
@@ -236,10 +275,11 @@ function mapTransaction(r: Record<string, unknown>): Transaction {
     categoryId: (r.category_id as string) ?? null,
     categoryName: (r.category_name as string) ?? null,
     seriesId: (r.series_id as string) ?? null,
+    installmentNumber: r.installment_number === null ? null : Number(r.installment_number),
+    installmentCount: r.installment_count === null ? null : Number(r.installment_count),
   };
 }
 
-/** Marca como pago/recebido ou volta para pendente. */
 /**
  * Marca como pago ou pendente. Pagar antes da data quer dizer que foi pago hoje: a data vira
  * hoje e o valor sai do saldo na hora (senão o saldo só mudaria no dia do vencimento).

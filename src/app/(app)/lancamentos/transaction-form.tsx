@@ -3,8 +3,9 @@
 import { useState } from "react";
 import type { AccountOption } from "@/domain/accounts";
 import type { CategoryOption } from "@/domain/categories";
-import { MAX_REPEAT, type Transaction, type TransactionType } from "@/domain/transactions";
-import { formatDate, today } from "@/lib/dates";
+import { MAX_REPEAT, installmentPlan, type Transaction, type TransactionType } from "@/domain/transactions";
+import { formatMoney } from "@/lib/money";
+import { formatDate, formatMonth, today } from "@/lib/dates";
 import { MoneyInput } from "@/components/money-input";
 import { FormError } from "@/components/form-error";
 import { useServerAction } from "@/components/use-server-action";
@@ -59,13 +60,17 @@ export function TransactionForm({
   const [date, setDate] = useState(transaction?.date ?? today());
   const [paid, setPaid] = useState(transaction?.paid ?? true);
   const [paidTouched, setPaidTouched] = useState(editing);
-  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [frequency, setFrequency] = useState<Frequency>("once");
+  const [cents, setCents] = useState<number | null>(transaction?.amount ?? null);
   const { run, pending, error } = useServerAction(saveTransaction, () => {
     rememberAccount(accountId);
     onDone();
   });
 
   const isTransfer = type === "transfer";
+  const onCard = accounts.find((a) => a.id === accountId)?.type === "credit_card";
+  // Transferência não parcela: se estava em "parcelado", volta para "uma vez".
+  const freq: Frequency = isTransfer && frequency === "installments" ? "once" : frequency;
   const categoryOptions = categories.filter((c) => c.kind === type);
   const destinations = accounts.filter((a) => a.id !== accountId);
 
@@ -115,7 +120,13 @@ export function TransactionForm({
       </label>
 
       <div className="fields">
-        <MoneyInput name="amount" label="Valor (R$)" required defaultCents={transaction?.amount} />
+        <MoneyInput
+          name="amount"
+          label="Valor (R$)"
+          required
+          defaultCents={transaction?.amount}
+          onCentsChange={setCents}
+        />
         <label>
           Data
           <input name="date" type="date" required value={date} min="1900-01-01" max="2100-12-31" onChange={(e) => changeDate(e.target.value)} />
@@ -174,23 +185,34 @@ export function TransactionForm({
 
       {!editing && (
         <div className="repeat-box">
-          <label className="check">
-            <input type="checkbox" name="repeatEnabled" checked={repeatEnabled} onChange={(e) => setRepeatEnabled(e.target.checked)} />
-            Repetir todo mês
-          </label>
-          {repeatEnabled && (
+          <input type="hidden" name="frequency" value={freq} />
+          <div className="segmented segmented-sm" role="radiogroup" aria-label="Quantas vezes">
+            {(Object.keys(frequencyLabels) as Frequency[])
+              .filter((f) => !(isTransfer && f === "installments"))
+              .map((f) => (
+                <button key={f} type="button" role="radio" aria-checked={freq === f} className={`segment ${freq === f ? "active" : ""}`} onClick={() => setFrequency(f)}>
+                  {frequencyLabels[f]}
+                </button>
+              ))}
+          </div>
+          {freq === "installments" && <InstallmentFields date={date} cents={cents} onCard={onCard} />}
+          {freq === "monthly" && (
             <label>
               Por quantos meses?
               <input name="repeat" type="number" inputMode="numeric" min={2} max={MAX_REPEAT} step={1} defaultValue={12} required />
               <span className="hint">
-                Cria um lançamento por mês, no mesmo dia. Os dos próximos meses ficam pendentes até você marcar como pagos.
+                Mesmo valor todo mês, no mesmo dia (assinatura, aluguel). Os dos próximos meses ficam pendentes até você pagar.
               </span>
             </label>
           )}
         </div>
       )}
-      {editing && transaction?.seriesId && (
-        <p className="hint">Este lançamento faz parte de uma série mensal. A edição muda só este mês.</p>
+      {editing && transaction?.installmentCount ? (
+        <p className="hint">
+          Parcela {transaction.installmentNumber} de {transaction.installmentCount}. A edição muda só esta parcela.
+        </p>
+      ) : (
+        editing && transaction?.seriesId && <p className="hint">Este lançamento faz parte de uma série mensal. A edição muda só este mês.</p>
       )}
 
       <FormError message={error} />
@@ -203,5 +225,65 @@ export function TransactionForm({
         </button>
       </div>
     </form>
+  );
+}
+
+type Frequency = "once" | "installments" | "monthly";
+const frequencyLabels: Record<Frequency, string> = { once: "Uma vez", installments: "Parcelado", monthly: "Todo mês" };
+
+/** Parcelas: o usuário diz quantas e se o valor é o total; a tela mostra o valor de cada uma e quando termina. */
+function InstallmentFields({ date, cents, onCard }: { date: string; cents: number | null; onCard: boolean }) {
+  const [count, setCount] = useState("10");
+  const [amountIs, setAmountIs] = useState<"total" | "installment">("total");
+  const n = /^\d{1,2}$/.test(count) ? Number(count) : 0;
+  const valid = n >= 2 && n <= MAX_REPEAT && cents !== null && cents > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const plan = valid ? installmentPlan(date, n, cents, amountIs === "total") : null;
+  const total = plan ? plan.amounts.reduce((s, a) => s + a, 0) : 0;
+
+  return (
+    <>
+      <div className="fields">
+        <label>
+          Número de parcelas
+          <input
+            name="installments"
+            type="number"
+            inputMode="numeric"
+            min={2}
+            max={MAX_REPEAT}
+            step={1}
+            value={count}
+            onChange={(e) => setCount(e.target.value)}
+            required
+          />
+        </label>
+        <label>
+          O valor digitado é
+          <select name="amountIs" value={amountIs} onChange={(e) => setAmountIs(e.target.value as "total" | "installment")}>
+            <option value="total">O total da compra</option>
+            <option value="installment">O valor de cada parcela</option>
+          </select>
+        </label>
+      </div>
+      {plan ? (
+        <div className="installment-preview" data-testid="previa-parcelas">
+          <strong>
+            {n}x de {formatMoney(plan.amounts[n - 1])}
+            {plan.amounts[0] !== plan.amounts[n - 1] && ` (1ª de ${formatMoney(plan.amounts[0])})`}
+          </strong>
+          <span>
+            Total {formatMoney(total)} · 1ª em {formatDate(plan.dates[0])} · <b>última em {formatDate(plan.lastDate)}</b> (
+            {formatMonth(plan.lastDate.slice(0, 7))})
+          </span>
+          <span className="hint">
+            {onCard
+              ? "No cartão, cada parcela entra sozinha na fatura do mês dela."
+              : "A 1ª parcela segue o \"Já foi pago\" acima; as outras ficam pendentes até você pagar."}
+          </span>
+        </div>
+      ) : (
+        <span className="hint">Informe o valor e de 2 a {MAX_REPEAT} parcelas para ver quando termina.</span>
+      )}
+    </>
   );
 }

@@ -37,10 +37,12 @@ export async function saveTransaction(form: FormData): Promise<ActionResult> {
     return runAction("Lançamento atualizado.", () => updateTransaction(getDb(), userId, id, transactionFromForm(form)));
   }
   return runAction("Lançamento salvo.", async () => {
-    const repeat = form.get("repeatEnabled") === "on" ? wholeNumberField(form, "repeat", 1) : 1;
+    const frequency = field(form, "frequency");
     await createTransaction(getDb(), userId, {
       ...transactionFromForm(form),
-      repeat,
+      repeat: frequency === "monthly" ? wholeNumberField(form, "repeat", 1) : 1,
+      installments: frequency === "installments" ? wholeNumberField(form, "installments", 0) : undefined,
+      amountIsTotal: field(form, "amountIs") !== "installment",
       submissionKey: field(form, "submissionKey"),
     });
   });

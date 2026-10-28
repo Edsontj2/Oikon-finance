@@ -27,6 +27,8 @@ export type InsightInput = {
   /** Total de saídas (pagas + pendentes) de cada um dos 3 meses anteriores. */
   previousExpenses: number[];
   categories: Array<{ name: string; monthTotal: number; monthlyLimit: number | null; previousAverage: number }>;
+  /** Compras parceladas cuja última parcela cai no mês exibido. */
+  installmentsEnding?: Array<{ description: string; amount: number }>;
 };
 
 const MAX_INSIGHTS = 5;
@@ -96,6 +98,19 @@ export function buildInsights(input: InsightInput): Insight[] {
         ? { tone: "bad", title: `Previsão: ${monthName} termina no negativo`, detail: `Com os pendentes do mês, o saldo total fica em ${formatMoney(endOfMonth)}.` }
         : { tone: "info", title: `Previsão para o fim de ${monthName}: ${formatMoney(endOfMonth)}`, detail: "Saldo total se tudo o que está pendente no mês for pago e recebido." },
     );
+  }
+
+  const ending = input.installmentsEnding ?? [];
+  if (ending.length > 0) {
+    const freed = ending.reduce((s, i) => s + i.amount, 0);
+    out.push({
+      tone: "good",
+      title:
+        ending.length === 1
+          ? `Última parcela de ${ending[0].description} em ${monthName}`
+          : `${ending.length} parcelamentos terminam em ${monthName}`,
+      detail: `A partir do mês seguinte sobram ${formatMoney(freed)} por mês.`,
+    });
   }
 
   if (input.isFutureMonth) {

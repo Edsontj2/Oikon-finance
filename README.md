@@ -9,7 +9,9 @@ Controle financeiro pessoal simples. Versão enxuta do Oikon: **4 partes** em ve
 | **Categorias** | Agrupam entradas e saídas; saídas podem ter limite mensal | categorias, orçamentos |
 | **Painel** | Saldo total, resultado do mês, a pagar/receber, gastos por categoria e uma **análise automática** do mês | dashboard, fluxo de caixa, relatórios |
 
-Criar, editar e excluir acontece em janelas (modais), sem sair da lista. Lançamentos mostra todos os meses por padrão, com filtros de período, conta, tipo e busca.
+Criar, editar e excluir acontece em janelas (modais), sem sair da lista. Um lançamento pode ser **uma vez**, **parcelado** (o app divide o total, mostra o valor de cada parcela e o dia e mês em que termina; cada parcela aparece como 3/10) ou **todo mês** (assinaturas, aluguel). No cartão de crédito cada parcela entra sozinha na fatura do mês dela.
+
+O painel mostra, além dos totais: ritmo do mês (quanto dá para gastar por dia, média diária, sobra prevista, quanto guardou), parcelamentos em aberto (quanto falta, quanto compromete por mês e quando fica livre) e entradas × saídas dos últimos 6 meses. Lançamentos mostra todos os meses por padrão, com filtros de período, conta, tipo e busca.
 
 Funciona como app no celular (PWA): pode ser instalado na tela inicial, não dá zoom ao tocar nos campos e se ajusta ao entalhe do iPhone. Dados financeiros nunca ficam guardados offline.
 

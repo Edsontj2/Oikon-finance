@@ -70,7 +70,7 @@ test("formulário adulterado: repetir=1000 e valor negativo dão mensagem, nada 
     });
   await dialog(page).getByRole("button", { name: "Salvar lançamento" }).click();
   await expect(dialog(page).getByRole("alert")).toHaveText("Repetir deve ser entre 1 e 60 meses.");
-  await dialog(page).getByLabel("Repetir todo mês").uncheck();
+  await dialog(page).getByRole("radio", { name: "Uma vez" }).click();
   await dialog(page).getByLabel("Valor (R$)").fill("R$-5");
   await dialog(page).getByRole("button", { name: "Salvar lançamento" }).click();
   await expect(dialog(page).getByRole("alert")).toHaveText("O valor precisa ser maior que zero.");
@@ -137,4 +137,36 @@ test("celular pequeno: 'Salvar lançamento' aparece sem rolar e tocar fora não 
   await page.mouse.click(160, 5);
   await expect(dialog(page).getByLabel("Descrição")).toHaveValue("Farmácia");
   await ctx.close();
+});
+
+test("compra parcelada no cartão: mostra quando termina, marca 1/10 e aparece no painel", async ({ page }) => {
+  await signup(page);
+  await page.goto("/contas");
+  await page.getByRole("button", { name: "Nova conta" }).click();
+  await dialog(page).getByLabel("Nome").fill("Nubank");
+  await dialog(page).getByLabel("Tipo").selectOption({ label: "Cartão de crédito" });
+  await dialog(page).getByRole("button", { name: "Criar conta" }).click();
+  await expectToast(page, "Conta criada.");
+
+  await page.goto("/lancamentos");
+  await page.getByRole("button", { name: "Novo lançamento" }).first().click();
+  await preencherLancamento(page, { descricao: "Geladeira", valor: "3.000,05", conta: "Nubank", data: "2026-10-15", parcelas: 10 });
+  const previa = dialog(page).getByTestId("previa-parcelas");
+  await expect(previa).toContainText("10x de R$ 300,00");
+  await expect(previa).toContainText("1ª de R$ 300,05");
+  await expect(previa).toContainText("última em 15/07/2027");
+  await expect(previa).toContainText("julho de 2027");
+  await expect(previa).toContainText("No cartão");
+  await dialog(page).getByRole("button", { name: "Salvar lançamento" }).click();
+  await expectToast(page, "Lançamento salvo.");
+
+  const geladeira = page.getByTestId("lancamento").filter({ hasText: "Geladeira" });
+  await expect(geladeira).toHaveCount(10);
+  await expect(geladeira.filter({ hasText: "1/10" })).toHaveCount(1);
+  await expect(geladeira.filter({ hasText: "10/10" })).toContainText("15/07/2027");
+
+  await page.goto("/?mes=2026-10");
+  const item = page.getByTestId("parcelamento").filter({ hasText: "Geladeira" });
+  await expect(item).toContainText("termina em 15/07/2027");
+  await expect(page.getByTestId("parcelas-fim")).toHaveText(/julho de 2027/i);
 });
