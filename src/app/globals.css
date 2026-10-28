@@ -509,3 +509,30 @@ button { font: inherit; color: inherit; }
 .chart-table th[scope="row"]::first-letter { text-transform: uppercase; }
 .chart-table + .hint { margin-top: 0.5rem; }
 .table-scroll { overflow-x: auto; }
+
+/* ---------- Carregamento ---------- */
+/* Barrinha dourada no topo enquanto a próxima página carrega. */
+.route-progress {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200; height: 3px; overflow: hidden;
+  background: color-mix(in oklab, var(--primary) 20%, transparent);
+}
+.route-progress::after {
+  content: ""; position: absolute; inset: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  animation: route-progress 900ms ease-in-out infinite;
+}
+@keyframes route-progress { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+.skeleton-page { animation: fade-in 150ms ease-out; }
+.skeleton {
+  display: block; border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.11) 50%, rgba(255, 255, 255, 0.05) 75%);
+  background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
+}
+.skeleton-title { width: 9rem; height: 1.6rem; margin: 0.25rem 0 1.25rem; }
+.skeleton-value { width: 70%; height: 1.4rem; margin-top: 0.6rem; }
+.skeleton-line { height: 0.85rem; margin: 0.7rem 0; }
+.skeleton-line.short { width: 40%; margin-top: 0; }
+.skeleton-line.medium { width: 65%; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes fade-in { from { opacity: 0; } }

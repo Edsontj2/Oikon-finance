@@ -1,19 +1,16 @@
 import { LogOut } from "lucide-react";
-import { getDb } from "@/lib/db";
-import { requireUserId } from "@/lib/auth";
-import { getUserName } from "@/data/users";
+import { requireUser } from "@/lib/auth";
 import { ToastProvider } from "@/components/toast";
 import { Logo } from "../logo";
-import { BottomNav, Sidebar } from "./nav";
+import { Navigation } from "./nav";
 import { signOut } from "./actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const userId = await requireUserId();
-  const name = (await getUserName(getDb(), userId)) ?? "";
+  const { name } = await requireUser();
   return (
     <ToastProvider>
       <div className="shell">
-        <Sidebar />
+        <Navigation />
         <div className="shell-main">
           <header className="topbar">
             <span className="topbar-logo"><Logo size="sm" /></span>
@@ -29,7 +26,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </header>
           <main className="content">{children}</main>
         </div>
-        <BottomNav />
       </div>
     </ToastProvider>
   );

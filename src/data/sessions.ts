@@ -14,12 +14,18 @@ export async function createSession(db: Db, userId: string): Promise<string> {
 
 /** A sessão existe, é desse usuário e não venceu? (Apagar o usuário apaga as sessões em cascata.) */
 export async function isSessionActive(db: Db, sessionId: string, userId: string): Promise<boolean> {
-  if (!isUuid(sessionId) || !isUuid(userId)) return false;
-  const { rows } = await db.query(
-    "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 AND expires_at > now()",
+  return (await activeSessionUserName(db, sessionId, userId)) !== null;
+}
+
+/** Nome de quem é dono da sessão, se ela ainda vale: confere a sessão e busca o nome numa consulta só. */
+export async function activeSessionUserName(db: Db, sessionId: string, userId: string): Promise<string | null> {
+  if (!isUuid(sessionId) || !isUuid(userId)) return null;
+  const { rows } = await db.query<{ name: string }>(
+    `SELECT u.name FROM sessions s JOIN users u ON u.id = s.user_id
+      WHERE s.id = $1 AND s.user_id = $2 AND s.expires_at > now()`,
     [sessionId, userId],
   );
-  return rows.length > 0;
+  return rows[0]?.name ?? null;
 }
 
 export async function deleteSession(db: Db, sessionId: string): Promise<void> {
