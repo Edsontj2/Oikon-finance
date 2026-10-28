@@ -175,6 +175,7 @@ ul { list-style: none; margin: 0; padding: 0; }
   transition: background-color 150ms, color 150ms;
 }
 .bottom-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 359px) { .bottom-item { font-size: 0.62rem; } .bottom-nav { left: 0.5rem; right: 0.5rem; } }
 .bottom-item.active { color: var(--primary); background: rgba(255, 255, 255, 0.1); box-shadow: var(--glass-shine); }
 
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -259,6 +260,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .status:disabled { opacity: 0.5; cursor: progress; }
 .status-paid { color: var(--success); background: color-mix(in oklab, var(--success) 10%, transparent); border-color: color-mix(in oklab, var(--success) 30%, transparent); }
 .status-pending { color: var(--warning); background: color-mix(in oklab, var(--warning) 10%, transparent); border-color: color-mix(in oklab, var(--warning) 30%, transparent); }
+.status-scheduled { color: var(--info); background: color-mix(in oklab, var(--info) 10%, transparent); border-color: color-mix(in oklab, var(--info) 30%, transparent); }
 .status-late { color: var(--error); background: color-mix(in oklab, var(--error) 10%, transparent); border-color: color-mix(in oklab, var(--error) 30%, transparent); }
 @media (max-width: 520px) {
   /* No celular a situação vai para baixo do lançamento, alinhada à esquerda. */
@@ -390,7 +392,7 @@ button { font: inherit; color: inherit; }
   background: rgba(28, 26, 24, 0.92); border-top: 1px solid var(--glass-border);
   border-radius: 0 0 24px 24px;
 }
-.modal-actions .btn { flex: 1 1 auto; }
+.modal-actions .btn { flex: 1 1 0; padding: 0 0.75rem; }
 @media (min-width: 520px) { .modal-actions .btn { flex: 0 0 auto; } }
 .danger-zone { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem; margin: 1.25rem 0; padding-top: 1rem; border-top: 1px solid var(--border); }
 .confirm-text { margin-bottom: 1rem; color: var(--muted); }

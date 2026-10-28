@@ -118,6 +118,8 @@ export function TransactionsView({ transactions, accounts, categories, emptyMess
 
 function TransactionRow({ t, todayStr, onOpen }: { t: Transaction; todayStr: string; onOpen: () => void }) {
   const late = !t.paid && t.date < todayStr;
+  // Marcado como pago com data futura (débito agendado): só sai do saldo no dia, igual ao painel.
+  const scheduled = t.paid && t.date > todayStr;
   const toggle = useServerAction(setTransactionPaid);
   const details = [
     formatDate(t.date),
@@ -142,12 +144,15 @@ function TransactionRow({ t, todayStr, onOpen }: { t: Transaction; todayStr: str
       </button>
       <button
         type="button"
-        className={`status ${t.paid ? "status-paid" : late ? "status-late" : "status-pending"}`}
+        className={`status ${scheduled ? "status-scheduled" : t.paid ? "status-paid" : late ? "status-late" : "status-pending"}`}
         disabled={toggle.pending}
-        onClick={() => toggle.run(t.id, !t.paid)}
-        title={t.paid ? "Voltar para pendente" : "Marcar como pago"}
+        // No agendado, tocar quer dizer "já paguei hoje": a data vira hoje e sai do saldo.
+        onClick={() => toggle.run(t.id, scheduled || !t.paid)}
+        title={scheduled ? `Agendado para ${formatDate(t.date)}. Tocar marca como pago hoje.` : t.paid ? "Voltar para pendente" : "Marcar como pago"}
       >
-        {t.paid ? (
+        {scheduled ? (
+          "agendado · pagar hoje"
+        ) : t.paid ? (
           <>
             <Check size={14} aria-hidden /> pago
           </>
