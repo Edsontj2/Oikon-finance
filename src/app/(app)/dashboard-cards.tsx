@@ -18,7 +18,9 @@ export function PaceCard({ today, month }: { today: string; month: MonthSummary 
           <span className="hint">
             {p.monthLeftover > 0
               ? `nos ${p.daysLeft} dias que faltam, sem fechar o mês no negativo`
-              : "o mês já fecha no negativo com o que está lançado"}
+              : p.monthLeftover < 0
+                ? "o mês já fecha no negativo com o que está lançado"
+                : "lance as entradas do mês para calcular"}
           </span>
         </div>
         <div className="metric">

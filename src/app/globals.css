@@ -31,6 +31,9 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
+  /* Distância da barra inferior até a borda: no iPhone ela invade um pouco a área do
+     indicador de início (como as barras do próprio sistema), sem colar na borda. */
+  --nav-gap: max(0.5rem, calc(var(--safe-bottom) - 1.25rem));
   color-scheme: dark;
 }
 
@@ -93,7 +96,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .content {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 1.25rem calc(1rem + var(--safe-right)) calc(var(--bottom-nav) + var(--safe-bottom) + 2.25rem) calc(1rem + var(--safe-left));
+  padding: 1.25rem calc(1rem + var(--safe-right)) calc(var(--bottom-nav) + var(--nav-gap) + 1.5rem) calc(1rem + var(--safe-left));
 }
 .topbar {
   position: sticky; top: 0; z-index: 30;
@@ -159,7 +162,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .bottom-nav {
   position: fixed; z-index: 30;
   left: calc(0.75rem + var(--safe-left)); right: calc(0.75rem + var(--safe-right));
-  bottom: calc(0.6rem + var(--safe-bottom));
+  bottom: var(--nav-gap);
   max-width: 480px; margin: 0 auto;
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem;
   padding: 0.35rem; border-radius: 999px;
@@ -416,7 +419,7 @@ button { font: inherit; color: inherit; }
 /* ---------- Avisos ---------- */
 .toasts {
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 100;
-  bottom: calc(var(--bottom-nav) + var(--safe-bottom) + 1.5rem);
+  bottom: calc(var(--bottom-nav) + var(--nav-gap) + 0.75rem);
   display: grid; gap: 0.5rem; width: max-content; max-width: calc(100vw - 2rem); pointer-events: none;
 }
 @media (min-width: 1024px) { .toasts { bottom: 1.5rem; } }
