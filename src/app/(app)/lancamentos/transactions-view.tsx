@@ -11,7 +11,7 @@ import { Money } from "@/components/money";
 import { Modal } from "@/components/modal";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useServerAction } from "@/components/use-server-action";
-import { removeTransaction, setTransactionPaid } from "../actions";
+import { payProjected, removeTransaction, setTransactionPaid, stopProjected } from "../actions";
 import { TransactionForm } from "./transaction-form";
 
 type Props = {
@@ -30,6 +30,7 @@ export function TransactionsView({ transactions, accounts, categories, emptyMess
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
+  const [projected, setProjected] = useState<Transaction | null>(null);
   const todayStr = today();
 
   const groups = new Map<string, Transaction[]>();
@@ -68,7 +69,11 @@ export function TransactionsView({ transactions, accounts, categories, emptyMess
             <h2 className="list-group-title">{formatMonth(month)}</h2>
             <ul className="list card">
               {items.map((t) => (
-                <TransactionRow key={t.id} t={t} todayStr={todayStr} onOpen={() => setEditing(t)} />
+                t.projected ? (
+                  <ProjectedRow key={t.id} t={t} onOpen={() => setProjected(t)} />
+                ) : (
+                  <TransactionRow key={t.id} t={t} todayStr={todayStr} onOpen={() => setEditing(t)} />
+                )
               ))}
             </ul>
           </section>
@@ -112,7 +117,59 @@ export function TransactionsView({ transactions, accounts, categories, emptyMess
       </Modal>
 
       <DeleteTransaction transaction={deleting} onClose={() => setDeleting(null)} />
+      <ProjectedDialog transaction={projected} onClose={() => setProjected(null)} />
     </>
+  );
+}
+
+/** Mês futuro de um "Todo mês": ainda não foi lançado; aparece para saber o que vem. */
+function ProjectedRow({ t, onOpen }: { t: Transaction; onOpen: () => void }) {
+  const details = [formatDate(t.date), t.toAccountName ? `${t.accountName} → ${t.toAccountName}` : t.accountName, t.categoryName].filter(Boolean);
+  return (
+    <li className="row row-projected" data-testid="lancamento-previsto">
+      <button type="button" className="row-main" onClick={onOpen} aria-label={`Previsto: ${t.description}`}>
+        <span className="row-text">
+          <span className="row-title">
+            {t.description} <Repeat size={13} className="row-icon" aria-label="mensal" />
+          </span>
+          <span className="row-sub">{details.join(" · ")}</span>
+        </span>
+        <span className="row-value">
+          <Money cents={signedAmount(t)} signed={t.type !== "transfer"} />
+          <ChevronRight size={16} className="row-chevron" aria-hidden />
+        </span>
+      </button>
+      <span className="status status-scheduled" title="Lançado automaticamente quando o mês chegar">previsto</span>
+    </li>
+  );
+}
+
+function ProjectedDialog({ transaction, onClose }: { transaction: Transaction | null; onClose: () => void }) {
+  const pay = useServerAction(payProjected, onClose);
+  const stop = useServerAction(stopProjected, onClose);
+  const t = transaction;
+  return (
+    <ConfirmDialog
+      open={t !== null}
+      onClose={onClose}
+      title="Lançamento previsto"
+      error={pay.error ?? stop.error}
+      message={
+        t && (
+          <>
+            <strong>{t.description}</strong> repete todo mês. O de {formatMonth(t.date.slice(0, 7))} ({formatDate(t.date)}) é lançado
+            sozinho quando o mês chegar, como pendente. Se já pagou, pague agora: sai do saldo hoje e esse mês não é lançado de novo.
+          </>
+        )
+      }
+    >
+      <button type="button" className="btn btn-danger" disabled={stop.pending || pay.pending} onClick={() => t?.projected && stop.run(t.projected.ruleId)}>
+        Parar de repetir
+      </button>
+      <button type="button" className="btn btn-primary" disabled={stop.pending || pay.pending} onClick={() => t?.projected && pay.run(t.projected.ruleId, t.projected.month)}>
+        Pagar agora
+      </button>
+    </ConfirmDialog>
   );
 }
 

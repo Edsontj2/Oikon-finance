@@ -31,7 +31,9 @@ export async function balanceForecast(db: Db, userId: string, now = new Date(), 
     ),
     db.query(
       `SELECT r.type, r.amount_cents, r.day, to_char(r.generated_through, 'YYYY-MM') AS through,
-              a.type AS account_type, a.closing_day, a.due_day, ta.type AS to_account_type
+              a.type AS account_type, a.closing_day, a.due_day, ta.type AS to_account_type,
+              ARRAY(SELECT to_char(x.recurring_month, 'YYYY-MM') FROM transactions x
+                     WHERE x.recurring_id = r.id AND x.recurring_month > r.generated_through) AS done
          FROM recurring_rules r
          JOIN accounts a ON a.id = r.account_id AND NOT a.archived
          LEFT JOIN accounts ta ON ta.id = r.to_account_id
@@ -49,6 +51,7 @@ export async function balanceForecast(db: Db, userId: string, now = new Date(), 
   for (const r of rules.rows) {
     const amount = num(r.amount_cents);
     for (let month = shiftMonth(r.through, 1); month <= endMonth; month = shiftMonth(month, 1)) {
+      if ((r.done as string[]).includes(month)) continue; // pago adiantado: já está nos lançamentos
       const date = dayOf(month, Number(r.day));
       const fromType = r.account_type as AccountType;
       if (fromType === "credit_card" && r.type === "expense") {

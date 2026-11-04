@@ -51,7 +51,8 @@ const isUnusual = (total: number, average: number) => average > 0 && total > ave
 async function projectedRecurring(db: Db, userId: string, month: string) {
   const { rows } = await db.query(
     `SELECT type, category_id, amount_cents FROM recurring_rules
-      WHERE user_id = $1 AND active AND to_char(generated_through, 'YYYY-MM') < $2 AND type <> 'transfer'`,
+      WHERE user_id = $1 AND active AND to_char(generated_through, 'YYYY-MM') < $2 AND type <> 'transfer'
+        AND NOT EXISTS (SELECT 1 FROM transactions x WHERE x.recurring_id = recurring_rules.id AND to_char(x.recurring_month, 'YYYY-MM') = $2)`,
     [userId, month],
   );
   const byCategory = new Map<string | null, number>();

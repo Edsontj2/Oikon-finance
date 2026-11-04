@@ -32,6 +32,8 @@ export type Transaction = {
   seriesId: string | null;
   /** "Todo mês" sem fim: id da regra que lança um por mês (null = não é recorrente). */
   recurringId?: string | null;
+  /** Mês futuro de um "Todo mês": aparece na lista, mas ainda não existe (é lançado quando o mês chega). */
+  projected?: { ruleId: string; month: string };
   /** Compra parcelada: esta é a parcela `installmentNumber` de `installmentCount`. */
   installmentNumber: number | null;
   installmentCount: number | null;

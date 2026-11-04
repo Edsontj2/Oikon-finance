@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 import { createAccount } from "@/data/accounts";
 import { createTransaction, deleteTransaction, listTransactions, searchTransactions, updateTransaction } from "@/data/transactions";
-import { ensureRecurring } from "@/data/recurring";
+import { ensureRecurring, payProjectedNow, projectedRecurring, stopRecurring } from "@/data/recurring";
+import { getDashboard } from "@/data/dashboard";
 import { listBills } from "@/data/bills";
 import { freshDb, newUser } from "./setup";
 
@@ -106,5 +107,33 @@ describe("todo mês, sem fim", () => {
     const s = await setup();
     await expect(createTransaction(db, s.userId, aluguel(s.bank, { installments: 3 }))).rejects.toThrow("só uma forma");
     await expect(createTransaction(db, s.userId, aluguel(s.bank, { repeat: 3 }))).rejects.toThrow("só uma forma");
+  });
+
+  it("meses futuros aparecem como previstos (um por mês); pagar adiantado não lança de novo", async () => {
+    const s = await setup();
+    await createTransaction(db, s.userId, aluguel(s.bank));
+    const NOW = at("2026-11-04");
+    expect(await projectedRecurring(db, s.userId, "2026-11")).toEqual([]);
+    const dez = await projectedRecurring(db, s.userId, "2026-12");
+    expect(dez).toHaveLength(1);
+    expect(dez[0]).toMatchObject({ description: "Aluguel", date: "2026-12-05", amount: R(1200), paid: false });
+    expect(await projectedRecurring(db, s.userId, "2027-03", { type: "income" })).toEqual([]);
+    expect(await projectedRecurring(db, s.userId, "2027-03", { search: "alug" })).toHaveLength(1);
+    expect((await getDashboard(db, s.userId, "2026-12", NOW)).month.pendingExpense).toBe(R(1200));
+
+    const ruleId = dez[0].projected!.ruleId;
+    await payProjectedNow(db, s.userId, ruleId, "2026-12", NOW);
+    await expect(payProjectedNow(db, s.userId, ruleId, "2026-12", NOW)).rejects.toThrow("já foi lançado");
+    await expect(payProjectedNow(db, s.userId, ruleId, "2026-11", NOW)).rejects.toThrow("pague pela lista");
+    expect(await projectedRecurring(db, s.userId, "2026-12")).toEqual([]);
+    let rows = await s.all();
+    expect(rows.map((r) => [r.date, r.paid])).toEqual([["2026-11-04", true], ["2026-11-05", false]]);
+
+    await ensureRecurring(db, s.userId, at("2027-01-10"));
+    rows = await s.all();
+    expect(rows.map((r) => r.date)).toEqual(["2026-11-04", "2026-11-05", "2027-01-05"]); // dezembro não volta
+
+    await stopRecurring(db, s.userId, ruleId);
+    expect(await projectedRecurring(db, s.userId, "2027-02")).toEqual([]);
   });
 });

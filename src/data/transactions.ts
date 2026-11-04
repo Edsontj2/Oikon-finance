@@ -140,9 +140,9 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
        )
        INSERT INTO transactions
          (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id,
-          installment_number, installment_count, card_kind, invoice_month, is_adjustment, recurring_id)
+          installment_number, installment_count, card_kind, invoice_month, is_adjustment, recurring_id, recurring_month)
        SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12, $14, $15, $16,
-              CASE WHEN $17::boolean THEN $7::uuid END
+              CASE WHEN $17::boolean THEN $7::uuid END, CASE WHEN $17::boolean THEN date_trunc('month', d.date)::date END
          FROM unnest($8::date[], $9::boolean[], $10::bigint[], $13::smallint[]) AS d(date, paid, amount, number)
         WHERE $11::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
        RETURNING id`,
@@ -231,13 +231,13 @@ export async function updateTransaction(
             SET type = $3, description = $4, amount_cents = $5, date = $6, paid = $7,
                 account_id = $8, to_account_id = $9, category_id = $10
           WHERE id = $1 AND user_id = $2
-         RETURNING id, recurring_id
+         RETURNING id, recurring_id, recurring_month
        ), rule AS (
          UPDATE recurring_rules r
             SET type = $3, description = $4, amount_cents = $5, account_id = $8, to_account_id = $9, category_id = $10
            FROM upd, transactions old
           WHERE r.id = upd.recurring_id AND r.user_id = $2 AND old.id = upd.id
-            AND NOT EXISTS (SELECT 1 FROM transactions o WHERE o.recurring_id = r.id AND o.id <> old.id AND o.date > old.date)
+            AND NOT EXISTS (SELECT 1 FROM transactions o WHERE o.recurring_id = r.id AND o.id <> old.id AND o.recurring_month > old.recurring_month)
          RETURNING 1
        )
        SELECT count(*)::int AS n FROM upd`,

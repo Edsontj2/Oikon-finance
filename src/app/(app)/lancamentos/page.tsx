@@ -7,6 +7,7 @@ import { listAccountOptions } from "@/data/accounts";
 import { listCategoryOptions } from "@/data/categories";
 import { monthSummary } from "@/data/dashboard";
 import { isTransactionType, searchTransactions } from "@/data/transactions";
+import { projectedRecurring, projectedTotals } from "@/data/recurring";
 import { Money } from "@/components/money";
 import { FilterBar, type Filters } from "./filter-bar";
 import { TransactionsView } from "./transactions-view";
@@ -32,7 +33,11 @@ export default async function LancamentosPage({ searchParams }: { searchParams: 
   };
   const shown = Math.min(Math.max(Number(param(params, "mostrar")) || PAGE_SIZE, PAGE_SIZE), MAX_SHOWN);
 
-  const [{ items, total }, summary] = await Promise.all([
+  // Mês futuro: os "Todo mês" aparecem como previstos, um por mês (ainda não existem no banco).
+  const projectedPromise = filters.mes
+    ? projectedRecurring(db, userId, filters.mes, { accountId: filters.conta, type: isTransactionType(filters.tipo) ? filters.tipo : undefined, search: filters.busca })
+    : Promise.resolve([]);
+  const [{ items: found, total: foundTotal }, summary, projected] = await Promise.all([
     searchTransactions(db, userId, {
       month: filters.mes,
       accountId: filters.conta,
@@ -42,7 +47,12 @@ export default async function LancamentosPage({ searchParams }: { searchParams: 
     }),
     // Com conta, tipo ou busca o resumo do mês inteiro não bateria com a lista: só aparece com o filtro de mês sozinho.
     filters.mes && !filters.conta && !filters.tipo && !filters.busca ? monthSummary(db, userId, filters.mes) : null,
+    projectedPromise,
   ]);
+  const items = [...projected, ...found].sort((a, b) => b.date.localeCompare(a.date));
+  const total = foundTotal + projected.length;
+  const toPay = summary ? summary.pendingExpense + projectedTotals(projected).expense : 0;
+  const toReceive = summary ? summary.pendingIncome + projectedTotals(projected).income : 0;
 
   const now = currentMonth();
   const months = Array.from({ length: 37 }, (_, i) => shiftMonth(now, 12 - i));
@@ -63,6 +73,8 @@ export default async function LancamentosPage({ searchParams }: { searchParams: 
                 <div><span className="label">Entradas</span><Money cents={summary.income} /></div>
                 <div><span className="label">Saídas</span><Money cents={-summary.expense} /></div>
                 <div><span className="label">Resultado</span><Money cents={summary.income - summary.expense} signed /></div>
+                {toPay > 0 && <div><span className="label">A pagar no mês</span><Money cents={-toPay} testId="mes-a-pagar" /></div>}
+                {toReceive > 0 && <div><span className="label">A receber no mês</span><Money cents={toReceive} testId="mes-a-receber" /></div>}
               </div>
             )}
           </>

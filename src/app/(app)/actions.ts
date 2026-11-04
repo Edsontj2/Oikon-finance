@@ -14,6 +14,7 @@ import {
   type TransactionType,
 } from "@/data/transactions";
 import { UserError } from "@/data/errors";
+import { payProjectedNow, stopRecurring } from "@/data/recurring";
 import { getDb } from "@/lib/db";
 import { endSession, requireUserId } from "@/lib/auth";
 import { field, moneyField, runAction, wholeNumberField, type ActionResult } from "../action-result";
@@ -55,6 +56,18 @@ export async function setTransactionPaid(id: string, paid: boolean): Promise<Act
   return runAction(paid ? "Marcado como pago." : "Voltou para pendente.", () =>
     setPaid(getDb(), userId, id, paid === true),
   );
+}
+
+/** Mês previsto de um "Todo mês": pagar agora (grava o lançamento daquele mês, pago hoje). */
+export async function payProjected(ruleId: string, month: string): Promise<ActionResult> {
+  const userId = await requireUserId();
+  return runAction("Pago agora. Esse mês não será lançado de novo.", () => payProjectedNow(getDb(), userId, ruleId, month));
+}
+
+/** Parar de repetir a partir de um mês previsto. */
+export async function stopProjected(ruleId: string): Promise<ActionResult> {
+  const userId = await requireUserId();
+  return runAction("Repetição encerrada.", () => stopRecurring(getDb(), userId, ruleId));
 }
 
 export async function removeTransaction(id: string, scope: "one" | "future"): Promise<ActionResult> {

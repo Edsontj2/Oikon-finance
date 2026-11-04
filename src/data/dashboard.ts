@@ -4,6 +4,7 @@ import { buildInsights, type Insight } from "@/domain/insights";
 import { listAccounts, type AccountWithBalance } from "./accounts";
 import { listCategories, type Category } from "./categories";
 import { groupCategories } from "@/domain/categories";
+import { projectedRecurring, projectedTotals } from "./recurring";
 import { listTransactions, type Transaction } from "./transactions";
 
 /**
@@ -204,7 +205,7 @@ export async function expenseHistory(db: Db, userId: string, month: string) {
 
 export async function getDashboard(db: Db, userId: string, month: string, now = new Date()): Promise<Dashboard> {
   const todayStr = today(now);
-  const [accounts, summary, pending, categories, uncategorized, recent, history, endOfMonth, installments, flow] = await Promise.all([
+  const [accounts, monthTotals, pending, categories, uncategorized, recent, history, endOfMonth, installments, flow, projected] = await Promise.all([
     listAccounts(db, userId, now),
     monthSummary(db, userId, month, now),
     overdueAndDueSoon(db, userId, todayStr),
@@ -215,7 +216,11 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
     endOfMonthBalance(db, userId, month, todayStr),
     openInstallments(db, userId, todayStr),
     monthlyFlow(db, userId, month),
+    month > currentMonth(now) ? projectedRecurring(db, userId, month) : Promise.resolve([]),
   ]);
+  // Mês futuro: o que os "Todo mês" ainda vão lançar entra como a pagar / a receber.
+  const extra = projectedTotals(projected);
+  const summary = { ...monthTotals, pendingIncome: monthTotals.pendingIncome + extra.income, pendingExpense: monthTotals.pendingExpense + extra.expense };
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
   // Subcategorias entram no total da categoria principal (o limite da principal vale para o grupo).
   const expenseCategories = groupCategories(categories.filter((c) => c.kind === "expense")).map(({ children, group, ...c }) => ({

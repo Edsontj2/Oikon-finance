@@ -44,3 +44,22 @@ test("subcategoria, orçamento do mês, previsão de saldo e meta com valor guar
   await expect(page.getByTestId("saldo-disponivel")).toHaveAttribute("data-cents", "258000");
   await expect(page.getByRole("heading", { name: /Evolução do patrimônio/ })).toBeVisible();
 });
+
+test("todo mês: dezembro mostra o previsto (um só), o total a pagar e dá para pagar adiantado", async ({ page }) => {
+  await signup(page);
+  await lancar(page, { descricao: "Internet", valor: "100", conta: "Carteira", pago: false, repetir: true });
+  await page.goto("/lancamentos?mes=2026-12");
+  await expect(page.getByTestId("lancamento-previsto")).toHaveCount(1);
+  await expect(page.getByTestId("lancamento-previsto")).toContainText("Internet");
+  await expect(page.getByTestId("mes-a-pagar")).toHaveAttribute("data-cents", "-10000");
+  await page.goto("/lancamentos?mes=2027-01");
+  await expect(page.getByTestId("lancamento-previsto")).toHaveCount(1);
+
+  await page.goto("/lancamentos?mes=2026-12");
+  await page.getByRole("button", { name: "Previsto: Internet" }).click();
+  await dialog(page).getByRole("button", { name: "Pagar agora" }).click();
+  await expectToast(page, /Pago agora/);
+  await expect(page.getByTestId("lancamento-previsto")).toHaveCount(0);
+  await page.goto("/lancamentos?mes=2027-01");
+  await expect(page.getByTestId("lancamento-previsto")).toHaveCount(1);
+});
