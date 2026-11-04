@@ -81,7 +81,7 @@ export async function monthSummary(db: Db, userId: string, month: string, now = 
   };
 }
 
-async function overdueAndDueSoon(db: Db, userId: string, todayStr: string) {
+export async function overdueAndDueSoon(db: Db, userId: string, todayStr: string) {
   const { rows } = await db.query(
     `SELECT
        COUNT(*) FILTER (WHERE date < $2) AS overdue_count,
@@ -110,7 +110,7 @@ async function overdueAndDueSoon(db: Db, userId: string, todayStr: string) {
  * Saldo total no fim do mês se tudo o que vence até lá for pago e recebido: o que já mexeu
  * no saldo + todos os lançamentos com data até o fim do mês (inclusive atrasados de antes).
  */
-async function endOfMonthBalance(db: Db, userId: string, month: string, todayStr: string): Promise<number> {
+export async function endOfMonthBalance(db: Db, userId: string, month: string, todayStr: string): Promise<number> {
   const { end } = monthRange(month);
   const { rows } = await db.query(
     `SELECT (SELECT COALESCE(SUM(initial_balance_cents), 0) FROM accounts WHERE user_id = $1)
@@ -122,7 +122,7 @@ async function endOfMonthBalance(db: Db, userId: string, month: string, todayStr
 }
 
 /** Compras parceladas (saídas) com parcelas ainda por pagar, as que terminam antes primeiro. */
-async function openInstallments(db: Db, userId: string, todayStr: string): Promise<OpenInstallment[]> {
+export async function openInstallments(db: Db, userId: string, todayStr: string): Promise<OpenInstallment[]> {
   const { rows } = await db.query(
     `SELECT series_id,
             (array_agg(description ORDER BY installment_number))[1] AS description,

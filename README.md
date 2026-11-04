@@ -71,6 +71,26 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## Assistente no WhatsApp
+
+Conversa com o mesmo backend do app: não tem lógica financeira própria. A mensagem é interpretada por regras fixas (`src/domain/assistant/parser.ts`, sem IA, então um texto não consegue "mandar" o sistema fazer outra coisa), vira uma operação pendente e, depois do **sim**, é gravada pelo mesmo `createTransaction` do app.
+
+- **Vínculo seguro:** o número só acessa a conta depois de enviar `vincular 123456`, código gerado em *Configurações → WhatsApp* com a pessoa logada (vale 10 minutos, uma vez, com limite de tentativas). O número sozinho não prova identidade.
+- **Confirmação sempre:** todo lançamento mostra um resumo; a confirmação fecha a operação numa única atualização e usa a própria operação como chave de envio, então confirmar duas vezes não grava duas vezes. A operação expira em 15 minutos e pode ser cancelada.
+- **Sem duplicidade:** cada mensagem é guardada pelo id do WhatsApp; webhook reenviado não é processado de novo.
+- **Webhook:** `GET/POST /api/whatsapp/webhook`. Responde 200 na hora e processa depois; o POST só é aceito com a assinatura `X-Hub-Signature-256` válida.
+- **O que entende:** despesas, receitas, transferências entre contas próprias (sem Pix real), compras parceladas no cartão, pagamento de fatura (transferência para o cartão, não é nova despesa), contas a pagar agendadas, "marcar ... como paga" e consultas (saldo, gastos, recebidos, quanto posso gastar, contas que vencem, atrasadas, cartões, parcelamentos, previsão, resumo, maiores despesas). Envie *ajuda* para ver exemplos.
+
+### Configurar na Meta
+
+1. Crie um app do tipo *Business* em developers.facebook.com e adicione o produto **WhatsApp**.
+2. Em *WhatsApp → Configuração da API*, anote o **id do número de telefone** e gere um **token permanente** (usuário do sistema com `whatsapp_business_messaging`).
+3. Em *WhatsApp → Configuração → Webhook*, use a URL `https://SEU-DOMINIO/api/whatsapp/webhook`, o mesmo texto de `WHATSAPP_VERIFY_TOKEN` e assine o campo **messages**.
+4. Em *Configurações do app → Básico*, copie a **chave secreta do app**.
+5. Preencha as variáveis `WHATSAPP_*` (veja `.env.example`) no projeto da Vercel e publique de novo.
+
+Respostas são enviadas dentro da janela de atendimento de 24 horas aberta pela mensagem da pessoa. Lembretes fora dessa janela exigem modelos de mensagem aprovados pela Meta (próxima etapa).
+
 ## Deploy (Vercel)
 
 Defina `DATABASE_URL` e `AUTH_SECRET` nas variáveis de ambiente do projeto. As migrações rodam sozinhas no build de produção (`vercel-build`); os previews não mexem no banco. O `.vercelignore` impede que o `.env` seja enviado junto com o código.

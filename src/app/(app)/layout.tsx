@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Settings } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { ToastProvider } from "@/components/toast";
 import { Logo } from "../logo";
@@ -17,6 +18,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <div className="topbar-user">
               <span className="avatar" aria-hidden>{name.trim().charAt(0).toUpperCase()}</span>
               <span className="topbar-name">{name}</span>
+              <Link href="/configuracoes" className="btn-icon" aria-label="Configurações" title="Configurações">
+                <Settings size={18} aria-hidden />
+              </Link>
               <form action={signOut}>
                 <button type="submit" className="btn btn-ghost btn-sm">
                   <LogOut size={16} aria-hidden /> Sair

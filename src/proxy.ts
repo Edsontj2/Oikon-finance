@@ -27,7 +27,8 @@ function contentSecurityPolicy(nonce: string, https: boolean): string {
  *    no banco pela página). 2) Cabeçalhos de segurança em toda resposta.
  */
 export async function proxy(request: NextRequest) {
-  const isPublic = publicPaths.includes(request.nextUrl.pathname);
+  // O webhook do WhatsApp não tem login: ele se autentica pela assinatura da Meta.
+  const isPublic = publicPaths.includes(request.nextUrl.pathname) || request.nextUrl.pathname.startsWith("/api/whatsapp/");
   if (!isPublic && !(await verifySession(request.cookies.get(SESSION_COOKIE)?.value))) {
     return NextResponse.redirect(new URL("/login", request.url));
   }

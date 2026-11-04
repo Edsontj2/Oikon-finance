@@ -18,6 +18,12 @@ export default defineConfig({
       DATABASE_URL,
       AUTH_SECRET: "segredo-de-teste-e2e-com-mais-de-32-caracteres",
       SIGNUP_LIMIT_PER_IP: "1000",
+      WHATSAPP_APP_SECRET: "segredo-do-app-e2e",
+      WHATSAPP_VERIFY_TOKEN: "token-de-verificacao-e2e",
+      WHATSAPP_TOKEN: "token-falso",
+      WHATSAPP_PHONE_NUMBER_ID: "123",
+      // Envio de respostas vai para uma porta fechada: o teste confere a resposta gravada no banco.
+      WHATSAPP_API_BASE: "http://127.0.0.1:9",
     },
   },
 });
