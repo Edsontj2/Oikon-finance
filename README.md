@@ -71,6 +71,20 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## Contas
+
+Cada conta tem tipo (corrente, poupança, dinheiro, cartão ou **investimento**), instituição, cor e
+ícone. Conta corrente pode ter **cheque especial**: o app avisa quando está em uso e mostra quanto
+resta, mas não conta o limite como dinheiro seu.
+
+- **Arquivar:** esconde a conta das listas de escolha e mantém todo o histórico. Só com saldo zerado
+  e sem lançamentos pendentes ou futuros, para os totais não mudarem.
+- **Conciliação:** em *Contas → conta → Conciliar e histórico*, informe o saldo do extrato numa data.
+  Se for diferente do app, é lançado um **ajuste** que corrige o saldo e fica fora dos relatórios
+  (não é receita nem despesa). Cada conferência fica registrada.
+- **Auditoria:** o banco registra toda criação, alteração e exclusão de contas e lançamentos (pelo app,
+  pelo WhatsApp ou por qualquer outro caminho), com o antes e o depois (`audit_log`, migração 0008).
+
 ## Cartões de crédito
 
 O cartão é uma conta do tipo "Cartão de crédito" com limite, dia de fechamento, dia de vencimento,

@@ -1,7 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createAccount, deleteAccount, updateAccount, type AccountType } from "@/data/accounts";
+import { createAccount, deleteAccount, setAccountArchived, updateAccount, type AccountType } from "@/data/accounts";
+import type { AccountIcon } from "@/domain/accounts";
+import { reconcileAccount } from "@/data/reconciliation";
 import { createCategory, deleteCategory, updateCategory, type CategoryKind } from "@/data/categories";
 import {
   createTransaction,
@@ -70,6 +72,10 @@ export async function saveAccount(form: FormData): Promise<ActionResult> {
     name: field(form, "name"),
     type: field(form, "type") as AccountType,
     initialBalance: moneyField(form, "initialBalance", "Saldo inicial", true) ?? 0,
+    institution: field(form, "institution") || null,
+    color: field(form, "color") || null,
+    icon: (field(form, "icon") || null) as AccountIcon | null,
+    overdraftLimit: field(form, "type") === "checking" ? moneyField(form, "overdraftLimit", "Cheque especial", true) : null,
   });
   if (id) return runAction("Conta atualizada.", () => updateAccount(getDb(), userId, id, input()));
   return runAction("Conta criada.", () =>
@@ -80,6 +86,22 @@ export async function saveAccount(form: FormData): Promise<ActionResult> {
 export async function removeAccount(id: string): Promise<ActionResult> {
   const userId = await requireUserId();
   return runAction("Conta excluída.", () => deleteAccount(getDb(), userId, id));
+}
+
+export async function archiveAccount(id: string, archived: boolean): Promise<ActionResult> {
+  const userId = await requireUserId();
+  return runAction(archived ? "Conta arquivada." : "Conta reativada.", () => setAccountArchived(getDb(), userId, id, archived === true));
+}
+
+export async function reconcile(form: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+  return runAction("Conciliação registrada.", () =>
+    reconcileAccount(getDb(), userId, field(form, "accountId"), {
+      statementBalance: moneyField(form, "statementBalance", "Saldo do extrato") ?? 0,
+      date: field(form, "date") || undefined,
+      submissionKey: field(form, "submissionKey"),
+    }),
+  );
 }
 
 export async function saveCategory(form: FormData): Promise<ActionResult> {

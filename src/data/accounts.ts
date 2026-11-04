@@ -5,7 +5,10 @@ import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
 import {
   accountTypes,
+  isAccountColor,
+  isAccountIcon,
   isAccountType,
+  type AccountIcon,
   type AccountOption,
   type AccountType,
   type AccountWithBalance,
@@ -20,7 +23,7 @@ export { accountTypes, isAccountType, type AccountOption, type AccountType, type
  */
 export async function listAccounts(db: Db, userId: string, now: Date = new Date()): Promise<AccountWithBalance[]> {
   const { rows } = await db.query(
-    `SELECT a.id, a.name, a.type, a.initial_balance_cents,
+    `SELECT a.id, a.name, a.type, a.initial_balance_cents, a.institution, a.color, a.icon, a.archived, a.overdraft_limit_cents,
             count(DISTINCT e.transaction_id) AS transaction_count,
             a.initial_balance_cents + COALESCE(SUM(e.delta) FILTER (WHERE e.paid AND e.date <= $2), 0) AS balance,
             a.initial_balance_cents + COALESCE(SUM(e.delta), 0) AS projected
@@ -28,7 +31,7 @@ export async function listAccounts(db: Db, userId: string, now: Date = new Date(
        LEFT JOIN transaction_effects e ON e.account_id = a.id
       WHERE a.user_id = $1
       GROUP BY a.id
-      ORDER BY a.created_at, a.name`,
+      ORDER BY a.archived, a.created_at, a.name`,
     [userId, today(now)],
   );
   return rows.map((r) => ({
@@ -39,19 +42,41 @@ export async function listAccounts(db: Db, userId: string, now: Date = new Date(
     balance: num(r.balance),
     projectedBalance: num(r.projected),
     transactionCount: num(r.transaction_count),
+    institution: r.institution ?? null,
+    color: r.color ?? null,
+    icon: r.icon ?? null,
+    archived: r.archived === true,
+    overdraftLimit: r.overdraft_limit_cents === null ? null : num(r.overdraft_limit_cents),
   }));
 }
 
-/** Só id e nome (para listas de seleção), sem calcular saldo. */
-export async function listAccountOptions(db: Db, userId: string): Promise<AccountOption[]> {
+/**
+ * Só id e nome (para listas de seleção), sem calcular saldo. Contas arquivadas ficam de fora,
+ * a não ser com `includeArchived` (filtros e edição de lançamentos antigos).
+ */
+export async function listAccountOptions(
+  db: Db,
+  userId: string,
+  opts: { includeArchived?: boolean } = {},
+): Promise<AccountOption[]> {
   const { rows } = await db.query<AccountOption>(
-    "SELECT id, name, type FROM accounts WHERE user_id = $1 ORDER BY created_at, name",
-    [userId],
+    `SELECT id, name, type, archived FROM accounts
+      WHERE user_id = $1 AND ($2 OR NOT archived) ORDER BY archived, created_at, name`,
+    [userId, opts.includeArchived === true],
   );
   return rows;
 }
 
-export type AccountInput = { name: string; type: AccountType; initialBalance: number };
+export type AccountInput = {
+  name: string;
+  type: AccountType;
+  initialBalance: number;
+  institution?: string | null;
+  color?: string | null;
+  icon?: AccountIcon | null;
+  /** Cheque especial em centavos (só conta corrente). */
+  overdraftLimit?: number | null;
+};
 
 async function validateAccount(db: Db, userId: string, input: AccountInput, exceptId?: string) {
   const name = requiredText(input.name, LIMITS.accountName, "Informe o nome da conta.", "O nome da conta");
@@ -63,7 +88,20 @@ async function validateAccount(db: Db, userId: string, input: AccountInput, exce
     [userId, name, exceptId ?? null],
   );
   if (rows.length) throw new UserError("Você já tem uma conta com esse nome.");
-  return { ...input, name };
+  const institution = input.institution?.trim()
+    ? requiredText(input.institution, 40, "", "O nome da instituição")
+    : null;
+  const color = input.color || null;
+  if (color !== null && !isAccountColor(color)) throw new UserError("Cor inválida.");
+  const icon = input.icon || null;
+  if (icon !== null && !isAccountIcon(icon)) throw new UserError("Ícone inválido.");
+  const overdraftLimit = input.overdraftLimit ?? null;
+  if (overdraftLimit !== null) {
+    if (input.type !== "checking") throw new UserError("Cheque especial só vale para conta corrente.");
+    if (!Number.isSafeInteger(overdraftLimit) || overdraftLimit <= 0) throw new UserError("O cheque especial precisa ser maior que zero.");
+    if (!isValidCents(overdraftLimit)) throw new UserError(TOO_BIG);
+  }
+  return { ...input, name, institution, color, icon, overdraftLimit };
 }
 
 export async function createAccount(
@@ -81,10 +119,10 @@ export async function createAccount(
          INSERT INTO form_submissions (user_id, key) SELECT $1, $5::uuid WHERE $5::uuid IS NOT NULL
          ON CONFLICT DO NOTHING RETURNING 1
        )
-       INSERT INTO accounts (user_id, name, type, initial_balance_cents)
-       SELECT $1, $2, $3, $4 WHERE $5::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
+       INSERT INTO accounts (user_id, name, type, initial_balance_cents, institution, color, icon, overdraft_limit_cents)
+       SELECT $1, $2, $3, $4, $6, $7, $8, $9 WHERE $5::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
        RETURNING id`,
-      [userId, account.name, account.type, account.initialBalance, key],
+      [userId, account.name, account.type, account.initialBalance, key, account.institution, account.color, account.icon, account.overdraftLimit],
     );
     return rows[0]?.id ?? null;
   } catch (err) {
@@ -95,11 +133,19 @@ export async function createAccount(
 export async function updateAccount(db: Db, userId: string, accountId: string, input: AccountInput): Promise<void> {
   assertUuid(accountId, "Conta não encontrada.");
   const account = await validateAccount(db, userId, input, accountId);
-  const { rowCount } = await db.query(
-    "UPDATE accounts SET name = $3, type = $4, initial_balance_cents = $5 WHERE id = $1 AND user_id = $2",
-    [accountId, userId, account.name, account.type, account.initialBalance],
-  );
-  if (!rowCount) throw new UserError("Conta não encontrada.");
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE accounts SET name = $3, type = $4, initial_balance_cents = $5, institution = $6, color = $7, icon = $8,
+              overdraft_limit_cents = $9
+        WHERE id = $1 AND user_id = $2`,
+      [accountId, userId, account.name, account.type, account.initialBalance, account.institution, account.color, account.icon, account.overdraftLimit],
+    );
+    if (!rowCount) throw new UserError("Conta não encontrada.");
+  } catch (err) {
+    // Deixar de ser cartão com limite/fechamento cadastrados.
+    if (pgCode(err) === "23514") throw new UserError("Esse cartão tem limite ou fechamento cadastrados: limpe em Cartões antes de mudar o tipo.");
+    throw err;
+  }
 }
 
 export async function deleteAccount(db: Db, userId: string, accountId: string): Promise<void> {
@@ -113,4 +159,21 @@ export async function deleteAccount(db: Db, userId: string, accountId: string): 
     }
     throw err;
   }
+}
+
+/**
+ * Arquiva (some das listas de escolha, fica no histórico) ou reativa a conta. Só arquiva com
+ * saldo zerado e sem nada pendente ou futuro, para o dinheiro não "sumir" dos totais.
+ */
+export async function setAccountArchived(db: Db, userId: string, accountId: string, archived: boolean, now = new Date()): Promise<void> {
+  assertUuid(accountId, "Conta não encontrada.");
+  if (archived) {
+    const account = (await listAccounts(db, userId, now)).find((a) => a.id === accountId);
+    if (!account) throw new UserError("Conta não encontrada.");
+    if (account.balance !== 0 || account.projectedBalance !== 0) {
+      throw new UserError("Só dá para arquivar com o saldo zerado e sem lançamentos pendentes ou futuros.");
+    }
+  }
+  const { rowCount } = await db.query("UPDATE accounts SET archived = $3 WHERE id = $1 AND user_id = $2", [accountId, userId, archived === true]);
+  if (!rowCount) throw new UserError("Conta não encontrada.");
 }

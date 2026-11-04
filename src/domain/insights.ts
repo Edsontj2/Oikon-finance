@@ -16,7 +16,7 @@ export type InsightInput = {
   totalBalance: number;
   /** Saldo total no fim do mês se tudo o que vence até lá for pago e recebido. */
   endOfMonthBalance?: number;
-  accounts: Array<{ name: string; type: string; balance: number }>;
+  accounts: Array<{ name: string; type: string; balance: number; overdraftLimit?: number | null }>;
   /** Do mês exibido: pago e pendente, em centavos. */
   income: number;
   expense: number;
@@ -62,7 +62,15 @@ export function buildInsights(input: InsightInput): Insight[] {
 
   for (const account of input.accounts) {
     if (account.balance < 0 && account.type !== "credit_card") {
-      out.push({ tone: "bad", title: `${account.name} está no negativo`, detail: `Saldo de ${formatMoney(account.balance)}.` });
+      const left = account.overdraftLimit ? account.overdraftLimit + account.balance : null;
+      out.push({
+        tone: "bad",
+        title: left !== null ? `${account.name} está no cheque especial` : `${account.name} está no negativo`,
+        detail:
+          left !== null
+            ? `Saldo de ${formatMoney(account.balance)}; ${left > 0 ? `restam ${formatMoney(left)} de limite` : "o limite acabou"}. O banco cobra juros por dia de uso.`
+            : `Saldo de ${formatMoney(account.balance)}.`,
+      });
     }
   }
 

@@ -42,12 +42,16 @@ export async function answerQuery(db: Db, userId: string, query: QueryKind, text
 
   switch (query) {
     case "balance": {
-      const accounts = await listAccounts(db, userId, now);
+      const accounts = (await listAccounts(db, userId, now)).filter((a) => !a.archived);
       const asked = findAccounts(n, accounts).map((f) => f.account.id);
       if (asked.length) {
         return accounts
           .filter((a) => asked.includes(a.id))
-          .map((a) => `*${a.name}*: ${money(a.balance)} hoje${a.projectedBalance !== a.balance ? `\nCom pendentes: ${money(a.projectedBalance)}` : ""}`)
+          .map(
+            (a) =>
+              `*${a.name}*: ${money(a.balance)} hoje${a.projectedBalance !== a.balance ? `\nCom pendentes: ${money(a.projectedBalance)}` : ""}` +
+              (a.overdraftLimit ? `\nCom cheque especial: ${money(a.balance + a.overdraftLimit)} disponível${a.balance < 0 ? " (já está usando o limite)" : ""}` : ""),
+          )
           .join("\n\n");
       }
       const money_ = accounts.filter((a) => a.type !== "credit_card");

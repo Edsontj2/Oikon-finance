@@ -3,6 +3,7 @@ export const accountTypes = {
   savings: "Poupança",
   cash: "Dinheiro",
   credit_card: "Cartão de crédito",
+  investment: "Investimento",
 } as const;
 export type AccountType = keyof typeof accountTypes;
 
@@ -10,7 +11,29 @@ export function isAccountType(value: unknown): value is AccountType {
   return typeof value === "string" && Object.hasOwn(accountTypes, value);
 }
 
-export type AccountOption = { id: string; name: string; type: AccountType };
+/** Ícones que a pessoa pode escolher (o desenho de cada um está na tela). */
+export const accountIcons = ["wallet", "bank", "piggy", "cash", "card", "chart", "phone", "building"] as const;
+export type AccountIcon = (typeof accountIcons)[number];
+export function isAccountIcon(value: unknown): value is AccountIcon {
+  return typeof value === "string" && (accountIcons as readonly string[]).includes(value);
+}
+
+/** Cores sugeridas (legíveis sobre o fundo escuro). */
+export const accountColors = ["#e8b04b", "#3987e5", "#2fb67c", "#d9534f", "#9b6bd6", "#e07b39", "#4bb7c9", "#a3a3a3"] as const;
+export function isAccountColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/.test(value);
+}
+
+/** Ícone padrão de cada tipo, quando a pessoa não escolheu. */
+export const defaultIcon: Record<AccountType, AccountIcon> = {
+  checking: "bank",
+  savings: "piggy",
+  cash: "cash",
+  credit_card: "card",
+  investment: "chart",
+};
+
+export type AccountOption = { id: string; name: string; type: AccountType; archived?: boolean };
 
 export type AccountWithBalance = AccountOption & {
   initialBalance: number;
@@ -19,4 +42,15 @@ export type AccountWithBalance = AccountOption & {
   /** Saldo depois que os pendentes (e os lançamentos futuros) acontecerem. */
   projectedBalance: number;
   transactionCount: number;
+  institution?: string | null;
+  color?: string | null;
+  icon?: AccountIcon | null;
+  archived?: boolean;
+  /** Cheque especial (só conta corrente), em centavos. */
+  overdraftLimit?: number | null;
 };
+
+/** Quanto ainda dá para gastar na conta contando o cheque especial. */
+export function availableWithOverdraft(a: Pick<AccountWithBalance, "balance" | "overdraftLimit">): number {
+  return a.balance + (a.overdraftLimit ?? 0);
+}

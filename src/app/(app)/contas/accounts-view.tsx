@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Plus } from "lucide-react";
-import { accountTypes, type AccountWithBalance } from "@/domain/accounts";
+import { accountTypes, availableWithOverdraft, type AccountWithBalance } from "@/domain/accounts";
+import { AccountIcon } from "@/components/account-icon";
 import { Money } from "@/components/money";
 import { Modal } from "@/components/modal";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -16,6 +17,8 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
   const [editing, setEditing] = useState<AccountWithBalance | null>(null);
   const [deleting, setDeleting] = useState<AccountWithBalance | null>(null);
   const remove = useServerAction(removeAccount, () => setDeleting(null));
+  const active = accounts.filter((a) => !a.archived);
+  const archived = accounts.filter((a) => a.archived);
   const total = accounts.reduce((s, a) => s + a.balance, 0);
   const projected = accounts.reduce((s, a) => s + a.projectedBalance, 0);
 
@@ -33,28 +36,16 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
         <div><span className="label">Com pendentes</span><Money cents={projected} /></div>
       </div>
 
-      {accounts.length === 0 ? (
+      {active.length === 0 ? (
         <div className="card empty"><p>Nenhuma conta ainda.</p></div>
       ) : (
-        <ul className="list card">
-          {accounts.map((a) => (
-            <li key={a.id} className="row" data-testid="conta">
-              <button type="button" className="row-main" onClick={() => setEditing(a)} aria-label={`Editar conta ${a.name}`}>
-                <span className="row-text">
-                  <span className="row-title">{a.name}</span>
-                  <span className="row-sub">
-                    {accountTypes[a.type]}
-                    {a.projectedBalance !== a.balance && <> · com pendentes: <Money cents={a.projectedBalance} /></>}
-                  </span>
-                </span>
-                <span className="row-value">
-                  <Money cents={a.balance} testId={`conta-saldo-${a.name}`} />
-                  <ChevronRight size={16} className="row-chevron" aria-hidden />
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <AccountList accounts={active} onEdit={setEditing} />
+      )}
+      {archived.length > 0 && (
+        <details className="card archived-list">
+          <summary>Arquivadas ({archived.length})</summary>
+          <AccountList accounts={archived} onEdit={setEditing} />
+        </details>
       )}
       <p className="hint page-hint">
         Saldo atual = saldo inicial + entradas recebidas − saídas pagas ± transferências, até hoje. No cartão de crédito,
@@ -73,6 +64,7 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
               {editing.type === "credit_card" && (
                 <Link className="btn btn-secondary" href={`/cartoes/${editing.id}`}>Faturas e limite</Link>
               )}
+              <Link className="btn btn-secondary" href={`/contas/${editing.id}`}>Conciliar e histórico</Link>
               <Link className="btn btn-secondary" href={`/lancamentos?conta=${editing.id}`}>
                 Ver lançamentos ({editing.transactionCount})
               </Link>
@@ -123,5 +115,38 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
         )}
       </ConfirmDialog>
     </>
+  );
+}
+
+function AccountList({ accounts, onEdit }: { accounts: AccountWithBalance[]; onEdit: (a: AccountWithBalance) => void }) {
+  return (
+    <ul className="list card">
+      {accounts.map((a) => (
+        <li key={a.id} className="row" data-testid="conta">
+          <button type="button" className="row-main" onClick={() => onEdit(a)} aria-label={`Editar conta ${a.name}`}>
+            <AccountIcon icon={a.icon} color={a.color} type={a.type} />
+            <span className="row-text">
+              <span className="row-title">{a.name}</span>
+              <span className="row-sub">
+                {accountTypes[a.type]}
+                {a.institution && <> · {a.institution}</>}
+                {a.projectedBalance !== a.balance && <> · com pendentes: <Money cents={a.projectedBalance} /></>}
+                {a.overdraftLimit ? (
+                  <>
+                    {" · "}
+                    {a.balance < 0 ? <span className="tag tag-late">usando cheque especial</span> : "cheque especial"}{" "}
+                    disponível <Money cents={availableWithOverdraft(a)} />
+                  </>
+                ) : null}
+              </span>
+            </span>
+            <span className="row-value">
+              <Money cents={a.balance} testId={`conta-saldo-${a.name}`} />
+              <ChevronRight size={16} className="row-chevron" aria-hidden />
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

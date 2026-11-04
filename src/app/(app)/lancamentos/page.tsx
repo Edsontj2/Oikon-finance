@@ -18,7 +18,7 @@ export default async function LancamentosPage({ searchParams }: { searchParams: 
   const params = await searchParams;
   const userId = await requireUserId();
   const db = getDb();
-  const [accounts, categories] = await Promise.all([listAccountOptions(db, userId), listCategoryOptions(db, userId)]);
+  const [accounts, categories] = await Promise.all([listAccountOptions(db, userId, { includeArchived: true }), listCategoryOptions(db, userId)]);
 
   // Filtros inválidos na URL são ignorados (voltam para "todos").
   const mes = param(params, "mes");

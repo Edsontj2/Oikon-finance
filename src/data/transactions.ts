@@ -42,6 +42,8 @@ export type NewTransaction = TransactionInput & {
   cardKind?: CardKind | null;
   /** Só para cartão: fatura escolhida à mão ("AAAA-MM"); vazio = pela data. */
   invoiceMonth?: string | null;
+  /** Ajuste de conciliação (serviço de conciliação): mexe no saldo, fica fora dos relatórios. */
+  isAdjustment?: boolean;
 };
 
 /** Datas de cada parcela de "repetir todo mês". */
@@ -105,6 +107,10 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
   const invoiceMonth = input.invoiceMonth ?? null;
   const tx = await validateTransaction(db, userId, input, cardKind);
   if (cardKind !== null || invoiceMonth !== null) await validateCardFields(db, userId, tx, cardKind, invoiceMonth);
+  const isAdjustment = input.isAdjustment === true;
+  if (isAdjustment && (tx.type === "transfer" || cardKind !== null || repeat !== 1 || input.installments !== undefined)) {
+    throw new UserError("Ajuste de conciliação inválido.");
+  }
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > MAX_REPEAT) {
     throw new UserError(`Repetir deve ser entre 1 e ${MAX_REPEAT} meses.`);
   }
@@ -121,8 +127,8 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
        )
        INSERT INTO transactions
          (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id,
-          installment_number, installment_count, card_kind, invoice_month)
-       SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12, $14, $15
+          installment_number, installment_count, card_kind, invoice_month, is_adjustment)
+       SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12, $14, $15, $16
          FROM unnest($8::date[], $9::boolean[], $10::bigint[], $13::smallint[]) AS d(date, paid, amount, number)
         WHERE $11::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
        RETURNING id`,
@@ -130,7 +136,7 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
         userId, tx.type, tx.description, tx.accountId, tx.toAccountId, tx.categoryId, seriesId,
         rows.dates, rows.paid, rows.amounts, submissionKey(input.submissionKey),
         rows.numbers ? rows.dates.length : null, rows.numbers ?? rows.dates.map(() => null),
-        cardKind, invoiceMonth,
+        cardKind, invoiceMonth, isAdjustment,
       ],
     );
     return inserted.map((r) => r.id);
@@ -257,7 +263,7 @@ const selectColumns = `
   t.id, t.type, t.description, t.amount_cents, to_char(t.date, 'YYYY-MM-DD') AS date, t.paid,
   t.account_id, a.name AS account_name, t.to_account_id, ta.name AS to_account_name,
   t.category_id, c.name AS category_name, t.series_id, t.installment_number, t.installment_count,
-  t.card_kind, t.invoice_month
+  t.card_kind, t.invoice_month, t.is_adjustment
   FROM transactions t
   JOIN accounts a ON a.id = t.account_id
   LEFT JOIN accounts ta ON ta.id = t.to_account_id
@@ -315,6 +321,7 @@ function mapTransaction(r: Record<string, unknown>): Transaction {
     installmentCount: r.installment_count === null ? null : Number(r.installment_count),
     cardKind: (r.card_kind as Transaction["cardKind"]) ?? null,
     invoiceMonth: (r.invoice_month as string) ?? null,
+    isAdjustment: r.is_adjustment === true,
   };
 }
 

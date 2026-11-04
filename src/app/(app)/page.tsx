@@ -91,7 +91,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
         <section className="card">
           <h2>Contas</h2>
           <ul className="mini-list">
-            {d.accounts.map((a) => (
+            {d.accounts.filter((a) => !a.archived).map((a) => (
               <li key={a.id}>
                 <span>{a.name}<span className="hint">{accountTypes[a.type]}</span></span>
                 <Money cents={a.balance} testId={`saldo-${a.name}`} />

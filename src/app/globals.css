@@ -563,3 +563,22 @@ button { font: inherit; color: inherit; }
 .inline-action:disabled { opacity: 0.5; cursor: progress; }
 .inline-action:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
 .summary .progress { margin-top: 0.4rem; }
+
+/* ---------- Contas ---------- */
+.account-icon {
+  display: inline-grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px;
+  color: var(--primary); background: rgba(255, 255, 255, 0.06); border: 1px solid var(--glass-border);
+}
+.row-main .account-icon { margin-right: 0.75rem; }
+.choice-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; border: 0; padding: 0; margin: 0; }
+.choice-grid legend { margin-bottom: 0.4rem; font-size: 0.9rem; }
+.choice { position: relative; cursor: pointer; }
+.choice input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.choice span {
+  display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
+  border: 1px solid var(--glass-border); background: rgba(255, 255, 255, 0.04); color: var(--muted);
+}
+.choice input:checked + span { border-color: var(--primary); color: var(--foreground); box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 45%, transparent); }
+.choice input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+.choice .swatch-dot { width: 22px; height: 22px; border-radius: 999px; }
+.archived-list { opacity: 0.75; }

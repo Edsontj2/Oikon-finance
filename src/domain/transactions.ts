@@ -37,6 +37,8 @@ export type Transaction = {
   cardKind?: CardKind | null;
   /** Cartão: fatura escolhida à mão ("AAAA-MM"). */
   invoiceMonth?: string | null;
+  /** Ajuste de conciliação: corrige o saldo, não é receita nem despesa. */
+  isAdjustment?: boolean;
 };
 
 export type InstallmentPlan = {

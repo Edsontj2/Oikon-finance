@@ -25,7 +25,7 @@ const LAST_ACCOUNT_KEY = "oikon:ultima-conta";
 function lastAccount(accounts: AccountOption[]): string | undefined {
   try {
     const id = localStorage.getItem(LAST_ACCOUNT_KEY);
-    return accounts.some((a) => a.id === id) ? id ?? undefined : undefined;
+    return accounts.some((a) => a.id === id && !a.archived) ? id ?? undefined : undefined;
   } catch {
     return undefined;
   }
@@ -56,7 +56,7 @@ export function TransactionForm({
   const editing = Boolean(transaction);
   const [submissionKey] = useState(() => crypto.randomUUID());
   const [type, setType] = useState<TransactionType>(transaction?.type ?? "expense");
-  const [accountId, setAccountId] = useState(() => transaction?.accountId ?? lastAccount(accounts) ?? accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(() => transaction?.accountId ?? lastAccount(accounts) ?? accounts.find((a) => !a.archived)?.id ?? "");
   const [date, setDate] = useState(transaction?.date ?? today());
   const [paid, setPaid] = useState(transaction?.paid ?? true);
   const [paidTouched, setPaidTouched] = useState(editing);
@@ -72,7 +72,9 @@ export function TransactionForm({
   // Transferência não parcela: se estava em "parcelado", volta para "uma vez".
   const freq: Frequency = isTransfer && frequency === "installments" ? "once" : frequency;
   const categoryOptions = categories.filter((c) => c.kind === type);
-  const destinations = accounts.filter((a) => a.id !== accountId);
+  // Arquivadas só aparecem se já são deste lançamento (para editar um antigo sem perder a conta).
+  const usable = accounts.filter((a) => !a.archived || a.id === transaction?.accountId || a.id === transaction?.toAccountId);
+  const destinations = usable.filter((a) => a.id !== accountId);
 
   function changeDate(value: string) {
     setDate(value);
@@ -137,7 +139,7 @@ export function TransactionForm({
         <label>
           {isTransfer ? "Sai de" : "Conta"}
           <select name="accountId" required value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-            {accounts.map((a) => (
+            {usable.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
