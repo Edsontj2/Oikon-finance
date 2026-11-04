@@ -21,7 +21,7 @@ export async function listCategories(db: Db, userId: string, month: string, now 
             COALESCE(SUM(t.amount_cents) FILTER (WHERE t.paid AND t.date <= $4::date), 0) AS paid_total,
             COALESCE(SUM(t.amount_cents) FILTER (WHERE NOT (t.paid AND t.date <= $4::date)), 0) AS pending_total
        FROM categories c
-       LEFT JOIN transactions t
+       LEFT JOIN report_transactions t
               ON t.category_id = c.id AND t.date >= $2 AND t.date < $3
       WHERE c.user_id = $1
       GROUP BY c.id

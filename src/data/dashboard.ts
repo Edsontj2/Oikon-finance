@@ -58,7 +58,11 @@ export type Dashboard = {
   today: string;
 };
 
-/** Transferências não entram: só mudam o dinheiro de lugar, não são ganho nem gasto. */
+/**
+ * Transferências não entram: só mudam o dinheiro de lugar, não são ganho nem gasto.
+ * Usa report_transactions (migração 0007): estorno de cartão abate a saída e o parcelamento
+ * de fatura não conta de novo.
+ */
 export async function monthSummary(db: Db, userId: string, month: string, now = new Date()): Promise<MonthSummary> {
   const { start, end } = monthRange(month);
   const done = settled("", "$4");
@@ -68,7 +72,7 @@ export async function monthSummary(db: Db, userId: string, month: string, now = 
        COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense' AND ${done}), 0)     AS expense,
        COALESCE(SUM(amount_cents) FILTER (WHERE type = 'income'  AND NOT ${done}), 0) AS pending_income,
        COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense' AND NOT ${done}), 0) AS pending_expense
-     FROM transactions
+     FROM report_transactions
      WHERE user_id = $1 AND date >= $2 AND date < $3`,
     [userId, start, end, today(now)],
   );
@@ -157,7 +161,7 @@ async function monthlyFlow(db: Db, userId: string, month: string): Promise<Month
     `SELECT to_char(date, 'YYYY-MM') AS month,
             COALESCE(SUM(amount_cents) FILTER (WHERE type = 'income'), 0) AS income,
             COALESCE(SUM(amount_cents) FILTER (WHERE type = 'expense'), 0) AS expense
-       FROM transactions
+       FROM report_transactions
       WHERE user_id = $1 AND date >= $2 AND date < $3
       GROUP BY 1`,
     [userId, `${months[0]}-01`, monthRange(month).end],
@@ -174,7 +178,7 @@ async function uncategorizedExpense(db: Db, userId: string, month: string, today
   const { rows } = await db.query(
     `SELECT COALESCE(SUM(amount_cents) FILTER (WHERE ${done}), 0) AS paid,
             COALESCE(SUM(amount_cents) FILTER (WHERE NOT ${done}), 0) AS pending
-       FROM transactions
+       FROM report_transactions
       WHERE user_id = $1 AND type = 'expense' AND category_id IS NULL AND date >= $2 AND date < $3`,
     [userId, start, end, todayStr],
   );
@@ -186,7 +190,7 @@ async function expenseHistory(db: Db, userId: string, month: string) {
   const months = [3, 2, 1].map((n) => shiftMonth(month, -n));
   const { rows } = await db.query(
     `SELECT to_char(date, 'YYYY-MM') AS month, category_id, SUM(amount_cents) AS total
-       FROM transactions
+       FROM report_transactions
       WHERE user_id = $1 AND type = 'expense' AND date >= $2 AND date < $3
       GROUP BY 1, 2`,
     [userId, `${months[0]}-01`, monthRange(month).start],

@@ -71,6 +71,25 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## Cartões de crédito
+
+O cartão é uma conta do tipo "Cartão de crédito" com limite, dia de fechamento, dia de vencimento,
+conta pagadora, bandeira e final (tela **Cartões**). As faturas não são uma tabela: são calculadas dos
+lançamentos do cartão (`src/domain/cards.ts`), então nunca ficam fora de sincronia.
+
+- Compra antes do dia de fechamento entra na fatura que fecha naquele mês; no dia do fechamento ou
+  depois, na seguinte. A fatura é identificada pelo mês do vencimento. Dá para mover um lançamento
+  para outra fatura à mão.
+- Pagar a fatura é uma transferência da conta pagadora para o cartão (não conta como gasto de novo).
+  Pagamento parcial é aceito: depois do vencimento, o que faltou vai para a fatura seguinte (rotativo).
+- Estorno abate a fatura e o gasto da categoria (não vira receita). Juros, multa/tarifa/anuidade e IOF
+  são lançados com o valor que o banco cobrou: o app não inventa taxas.
+- Parcelar a fatura: informe parcelas e valor oferecidos pelo banco; a fatura é quitada, as parcelas
+  entram nas próximas e só a diferença (juros) conta como gasto novo.
+- Limite disponível = limite − tudo o que ainda vai ser cobrado (inclui parcelas futuras). Mudanças de
+  limite ficam no histórico.
+- Relatórios usam a view `report_transactions` (migração 0007) para aplicar essas regras em todo lugar.
+
 ## Assistente no WhatsApp
 
 Conversa com o mesmo backend do app: não tem lógica financeira própria. A mensagem é interpretada por regras fixas (`src/domain/assistant/parser.ts`, sem IA, então um texto não consegue "mandar" o sistema fazer outra coisa), vira uma operação pendente e, depois do **sim**, é gravada pelo mesmo `createTransaction` do app.

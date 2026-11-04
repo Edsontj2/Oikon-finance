@@ -177,7 +177,7 @@ ul { list-style: none; margin: 0; padding: 0; }
   left: calc(0.75rem + var(--safe-left)); right: calc(0.75rem + var(--safe-right));
   bottom: var(--nav-gap);
   max-width: 480px; margin: 0 auto;
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem;
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.15rem;
   padding: 0.35rem; border-radius: 999px;
   background: rgba(22, 22, 24, 0.72);
   backdrop-filter: blur(22px) saturate(150%);
@@ -482,7 +482,7 @@ button { font: inherit; color: inherit; }
 .metric-text { font-family: inherit; font-size: 1rem; }
 .metric-text::first-letter { text-transform: uppercase; }
 .metric .hint { font-size: 0.75rem; }
-.progress { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.progress { display: block; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .progress > span { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
 .progress + .hint { margin-top: 0.35rem; }
 
@@ -555,3 +555,11 @@ button { font: inherit; color: inherit; }
 .wa-status { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.75rem; }
 .wa-reply { white-space: pre-line; }
 .card > .muted + .form-error, .card > .muted + .stack, .card > .muted + .wa-status { margin-top: 0.75rem; }
+
+/* ---------- Cartões ---------- */
+.inline-action {
+  all: unset; cursor: pointer; color: var(--primary); font-size: 0.8rem; text-decoration: underline; text-underline-offset: 2px;
+}
+.inline-action:disabled { opacity: 0.5; cursor: progress; }
+.inline-action:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+.summary .progress { margin-top: 0.4rem; }

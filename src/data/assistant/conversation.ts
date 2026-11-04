@@ -25,6 +25,7 @@ import { allowAttempt } from "../rate-limit";
 import { createTransaction, searchTransactions, setPaid } from "../transactions";
 import { getLinkByPhone, redeemLinkCode, type WhatsappLink } from "./link";
 import { answerQuery } from "./queries";
+import { listCards } from "../cards";
 
 /** Quanto tempo uma operação espera confirmação. */
 export const PENDING_MINUTES = 15;
@@ -142,6 +143,14 @@ async function respond(db: Db, link: WhatsappLink, text: string, n: string, inte
       const accounts = await listAccountOptions(db, userId);
       const categories = await listCategoryOptions(db, userId);
       const draft = buildDraft(text, intent.operation, { accounts, categories, now, scheduled: intent.scheduled });
+      // "Paguei a fatura do C6": valor = o que falta da fatura fechada; conta = a pagadora do cartão.
+      if (draft.operation === "transfer" && draft.destinationAccountId && /\bfatura\b/.test(n)) {
+        const card = (await listCards(db, userId, now)).find((c) => c.id === draft.destinationAccountId);
+        if (card) {
+          if (!draft.amount && card.toPay && card.toPay.remaining > 0) draft.amount = card.toPay.remaining;
+          if (!draft.accountId && card.payerAccountId) draft.accountId = card.payerAccountId;
+        }
+      }
       // Conta padrão só quando configurada e sem ambiguidade (transferência precisa das duas pontas).
       if (!draft.accountId && draft.operation !== "transfer" && link.defaultAccountId && accounts.some((a) => a.id === link.defaultAccountId)) {
         draft.accountId = link.defaultAccountId;

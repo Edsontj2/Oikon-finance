@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeftRight, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Tags, Wallet } from "lucide-react";
+import { ArrowLeftRight, CreditCard, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Tags, Wallet } from "lucide-react";
 
 const items = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
   { href: "/contas", label: "Contas", icon: Wallet },
+  { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/categorias", label: "Categorias", icon: Tags },
 ];
 

@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { num, type Db } from "@/lib/db";
-import { addMonths, isValidDate, monthRange, today } from "@/lib/dates";
+import { addMonths, isValidDate, isValidMonth, monthRange, today } from "@/lib/dates";
 import { UserError, assertUuid, isUuid, submissionKey, toUserError } from "./errors";
 import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
+import { cardKinds, type CardKind } from "@/domain/cards";
 
 import {
   MAX_REPEAT,
@@ -37,6 +38,10 @@ export type NewTransaction = TransactionInput & {
   amountIsTotal?: boolean;
   /** Chave única do envio do formulário; reenviar a mesma chave não lança de novo. */
   submissionKey?: string | null;
+  /** Só para cartão (serviço de cartões): o que o lançamento é dentro da fatura. */
+  cardKind?: CardKind | null;
+  /** Só para cartão: fatura escolhida à mão ("AAAA-MM"); vazio = pela data. */
+  invoiceMonth?: string | null;
 };
 
 /** Datas de cada parcela de "repetir todo mês". */
@@ -47,7 +52,12 @@ export function seriesDates(firstDate: string, repeat: number): string[] {
 type ValidTransaction = TransactionInput & { toAccountId: string | null; categoryId: string | null };
 
 /** Valida os campos e confere que contas e categoria são do próprio usuário. */
-async function validateTransaction(db: Db, userId: string, input: TransactionInput): Promise<ValidTransaction> {
+async function validateTransaction(
+  db: Db,
+  userId: string,
+  input: TransactionInput,
+  cardKind: CardKind | null = null,
+): Promise<ValidTransaction> {
   if (!isTransactionType(input.type)) throw new UserError("Tipo de lançamento inválido.");
   const description = requiredText(input.description, LIMITS.description, "Informe a descrição.", "A descrição");
   if (!Number.isSafeInteger(input.amount) || input.amount <= 0) {
@@ -78,9 +88,11 @@ async function validateTransaction(db: Db, userId: string, input: TransactionInp
       userId,
     ]);
     if (!cat.rows[0]) throw new UserError("Categoria não encontrada.");
-    if (cat.rows[0].kind !== input.type) {
+    // Estorno é entrada no cartão, mas abate um gasto: usa a categoria de saída da compra.
+    const expectedKind = cardKind === "refund" ? "expense" : input.type;
+    if (cat.rows[0].kind !== expectedKind) {
       throw new UserError(
-        input.type === "income" ? "Escolha uma categoria de entrada." : "Escolha uma categoria de saída.",
+        expectedKind === "income" ? "Escolha uma categoria de entrada." : "Escolha uma categoria de saída.",
       );
     }
   }
@@ -89,7 +101,10 @@ async function validateTransaction(db: Db, userId: string, input: TransactionInp
 
 export async function createTransaction(db: Db, userId: string, input: NewTransaction): Promise<string[]> {
   const repeat = input.repeat ?? 1;
-  const tx = await validateTransaction(db, userId, input);
+  const cardKind = input.cardKind ?? null;
+  const invoiceMonth = input.invoiceMonth ?? null;
+  const tx = await validateTransaction(db, userId, input, cardKind);
+  if (cardKind !== null || invoiceMonth !== null) await validateCardFields(db, userId, tx, cardKind, invoiceMonth);
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > MAX_REPEAT) {
     throw new UserError(`Repetir deve ser entre 1 e ${MAX_REPEAT} meses.`);
   }
@@ -106,8 +121,8 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
        )
        INSERT INTO transactions
          (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id,
-          installment_number, installment_count)
-       SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12
+          installment_number, installment_count, card_kind, invoice_month)
+       SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12, $14, $15
          FROM unnest($8::date[], $9::boolean[], $10::bigint[], $13::smallint[]) AS d(date, paid, amount, number)
         WHERE $11::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
        RETURNING id`,
@@ -115,11 +130,24 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
         userId, tx.type, tx.description, tx.accountId, tx.toAccountId, tx.categoryId, seriesId,
         rows.dates, rows.paid, rows.amounts, submissionKey(input.submissionKey),
         rows.numbers ? rows.dates.length : null, rows.numbers ?? rows.dates.map(() => null),
+        cardKind, invoiceMonth,
       ],
     );
     return inserted.map((r) => r.id);
   } catch (err) {
     throw toUserError(err);
+  }
+}
+
+/** Campos de cartão: só em conta do tipo cartão e com o tipo de lançamento certo. */
+async function validateCardFields(db: Db, userId: string, tx: ValidTransaction, cardKind: CardKind | null, invoiceMonth: string | null) {
+  if (cardKind !== null && !Object.hasOwn(cardKinds, cardKind)) throw new UserError("Tipo de lançamento do cartão inválido.");
+  if (invoiceMonth !== null && !isValidMonth(invoiceMonth)) throw new UserError("Fatura inválida.");
+  const { rows } = await db.query<{ type: string }>("SELECT type FROM accounts WHERE id = $1 AND user_id = $2", [tx.accountId, userId]);
+  if (rows[0]?.type !== "credit_card") throw new UserError("Esse lançamento só vale para cartão de crédito.");
+  const credit = cardKind === "refund" || cardKind === "invoice_credit";
+  if (cardKind !== null && (credit ? tx.type !== "income" : tx.type !== "expense")) {
+    throw new UserError("Tipo de lançamento do cartão inválido.");
   }
 }
 
@@ -166,7 +194,14 @@ export async function updateTransaction(
   input: TransactionInput,
 ): Promise<void> {
   assertUuid(transactionId, "Lançamento não encontrado.");
-  const tx = await validateTransaction(db, userId, input);
+  const current = await db.query<{ card_kind: CardKind | null }>(
+    "SELECT card_kind FROM transactions WHERE id = $1 AND user_id = $2",
+    [transactionId, userId],
+  );
+  if (!current.rows[0]) throw new UserError("Lançamento não encontrado.");
+  const cardKind = current.rows[0].card_kind;
+  const tx = await validateTransaction(db, userId, input, cardKind);
+  if (cardKind !== null) await validateCardFields(db, userId, tx, cardKind, null);
   try {
     const { rowCount } = await db.query(
       `UPDATE transactions
@@ -221,7 +256,8 @@ function buildFilter(userId: string, filter: TransactionFilter) {
 const selectColumns = `
   t.id, t.type, t.description, t.amount_cents, to_char(t.date, 'YYYY-MM-DD') AS date, t.paid,
   t.account_id, a.name AS account_name, t.to_account_id, ta.name AS to_account_name,
-  t.category_id, c.name AS category_name, t.series_id, t.installment_number, t.installment_count
+  t.category_id, c.name AS category_name, t.series_id, t.installment_number, t.installment_count,
+  t.card_kind, t.invoice_month
   FROM transactions t
   JOIN accounts a ON a.id = t.account_id
   LEFT JOIN accounts ta ON ta.id = t.to_account_id
@@ -277,6 +313,8 @@ function mapTransaction(r: Record<string, unknown>): Transaction {
     seriesId: (r.series_id as string) ?? null,
     installmentNumber: r.installment_number === null ? null : Number(r.installment_number),
     installmentCount: r.installment_count === null ? null : Number(r.installment_count),
+    cardKind: (r.card_kind as Transaction["cardKind"]) ?? null,
+    invoiceMonth: (r.invoice_month as string) ?? null,
   };
 }
 

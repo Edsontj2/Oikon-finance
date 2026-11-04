@@ -70,6 +70,9 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
           <>
             <AccountForm account={editing} onDone={() => setEditing(null)} onCancel={() => setEditing(null)} />
             <div className="danger-zone">
+              {editing.type === "credit_card" && (
+                <Link className="btn btn-secondary" href={`/cartoes/${editing.id}`}>Faturas e limite</Link>
+              )}
               <Link className="btn btn-secondary" href={`/lancamentos?conta=${editing.id}`}>
                 Ver lançamentos ({editing.transactionCount})
               </Link>

@@ -1,5 +1,6 @@
 /** Tipos e regras de lançamento que valem no servidor e na tela (sem acesso ao banco). */
 import { addMonths } from "@/lib/dates";
+import type { CardKind } from "./cards";
 
 export type TransactionType = "income" | "expense" | "transfer";
 
@@ -32,6 +33,10 @@ export type Transaction = {
   /** Compra parcelada: esta é a parcela `installmentNumber` de `installmentCount`. */
   installmentNumber: number | null;
   installmentCount: number | null;
+  /** Cartão: estorno, juros, IOF, parcela da fatura... (compra comum = null). */
+  cardKind?: CardKind | null;
+  /** Cartão: fatura escolhida à mão ("AAAA-MM"). */
+  invoiceMonth?: string | null;
 };
 
 export type InstallmentPlan = {

@@ -3,8 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 import { createAccount, listAccounts } from "@/data/accounts";
 import { monthSummary } from "@/data/dashboard";
-import { searchTransactions } from "@/data/transactions";
+import { createTransaction, searchTransactions } from "@/data/transactions";
 import { createLinkCode, getLinkForUser, updateLinkSettings } from "@/data/assistant/link";
+import { updateCardSettings } from "@/data/cards";
 import { handleIncomingMessage } from "@/data/assistant/conversation";
 import { extractMessages, verifySignature } from "@/lib/whatsapp";
 import { freshDb, newUser } from "./setup";
@@ -158,6 +159,25 @@ describe("lançamentos com confirmação", () => {
     await s.send("Gastei 2000000000 no Nubank");
     expect(await s.send("sim")).toContain("Não registrei");
     expect(await s.txs()).toHaveLength(0);
+  });
+});
+
+describe("cartões no WhatsApp", () => {
+  it("fatura e limite vêm do cartão; 'paguei a fatura' sem valor usa o que falta e a conta pagadora", async () => {
+    const s = await setup();
+    await updateCardSettings(db, s.userId, s.c6, { creditLimit: R(3000), closingDay: 3, dueDay: 10, payerAccountId: s.inter, brand: null, last4: null });
+    // Compra em 20/10 caiu na fatura que fechou em 03/11 e vence em 10/11.
+    await createTransaction(db, s.userId, { type: "expense", description: "Loja", amount: R(300), date: "2026-10-20", paid: true, accountId: s.c6 });
+    const debt = await s.send("Quanto devo no cartão C6?");
+    expect(debt).toContain("Fatura de novembro");
+    expect(debt).toContain("R$ 300,00");
+    expect(debt).toContain("Limite disponível: R$ 2.700,00");
+    const preview = await s.send("Paguei a fatura do C6");
+    expect(preview).toContain("R$ 300,00");
+    expect(preview).toContain("De: Inter");
+    await s.send("sim");
+    expect(await s.balance(s.inter)).toBe(R(200));
+    expect(await s.balance(s.c6)).toBe(0);
   });
 });
 

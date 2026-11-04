@@ -48,6 +48,7 @@ export function AccountForm({
         allowNegative
         hint={type === "credit_card" ? "Fatura em aberto? Use negativo, ex.: -350,00" : "Quanto tinha na conta ao começar a usar o OIKON."}
       />
+      {type === "credit_card" && <p className="hint">Limite, fechamento, vencimento e conta que paga a fatura ficam em Cartões.</p>}
       <FormError message={error} />
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancelar</button>

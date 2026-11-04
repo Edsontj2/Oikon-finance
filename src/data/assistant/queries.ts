@@ -12,6 +12,8 @@ import { listAccounts } from "../accounts";
 import { listCategories, listCategoryOptions } from "../categories";
 import { endOfMonthBalance, monthSummary, openInstallments, overdueAndDueSoon } from "../dashboard";
 import { searchTransactions } from "../transactions";
+import { listCards } from "../cards";
+import { invoiceStatusLabel } from "@/domain/cards";
 
 const money = formatMoney;
 const monthName = (month: string) => formatMonth(month).split(" de ")[0];
@@ -119,30 +121,31 @@ export async function answerQuery(db: Db, userId: string, query: QueryKind, text
     }
 
     case "card_debt": {
-      const cards = (await listAccounts(db, userId, now)).filter((a) => a.type === "credit_card");
+      const cards = await listCards(db, userId, now);
       if (!cards.length) return "Você ainda não tem cartão de crédito cadastrado. Crie em Contas, com o tipo \"Cartão de crédito\".";
-      const asked = findAccounts(n, cards).map((f) => f.account.id);
+      const asked = findAccounts(n, cards.map((c) => ({ id: c.id, name: c.name, type: "credit_card" as const }))).map((f) => f.account.id);
       const shown = asked.length ? cards.filter((c) => asked.includes(c.id)) : cards;
-      const lines = shown.map((c) => `• *${c.name}*: deve ${money(Math.max(0, -c.balance))} hoje · com parcelas futuras ${money(Math.max(0, -c.projectedBalance))}`);
-      const limitNote = /\blimite\b/.test(n) ? "\n\nO limite dos cartões ainda não é cadastrado no app, então não consigo dizer o disponível." : "";
-      return [`*Cartões*`, ...lines].join("\n") + limitNote;
+      const blocks = shown.map((c) => {
+        const lines = [`*${c.name}*`];
+        if (c.toPay) lines.push(`Fatura de ${monthName(c.toPay.month)} (${invoiceStatusLabel[c.toPay.status].toLowerCase()}): ${money(c.toPay.remaining)} · vence ${formatDate(c.toPay.dueDate)}`);
+        if (c.current) lines.push(`Fatura aberta (${monthName(c.current.month)}): ${money(Math.max(0, c.current.remaining))} até agora · fecha ${formatDate(c.current.closingDate)}`);
+        lines.push(`Total com parcelas futuras: ${money(c.limit.committed)}`);
+        if (c.limit.limit !== null) lines.push(`Limite disponível: ${money(c.limit.available ?? 0)} de ${money(c.limit.limit)}`);
+        else if (/\blimite\b/.test(n)) lines.push("Limite não cadastrado (cadastre em Cartões no app).");
+        if (!c.configured) lines.push("Fechamento e vencimento não cadastrados: as faturas estão por mês do calendário.");
+        return lines.join("\n");
+      });
+      return blocks.join("\n\n");
     }
 
     case "next_invoice": {
-      const next = shiftMonth(month, 1);
-      const cards = (await listAccounts(db, userId, now)).filter((a) => a.type === "credit_card");
+      const cards = await listCards(db, userId, now);
       if (!cards.length) return "Você ainda não tem cartão de crédito cadastrado.";
-      const { start, end } = monthRange(next);
-      const items = (await transactionsBetween(db, userId, start, addDays(end, -1))).filter(
-        (t) => t.type === "expense" && cards.some((c) => c.id === t.accountId),
-      );
-      const total = items.reduce((s, t) => s + t.amount, 0);
-      return [
-        `*Lançado nos cartões para ${monthName(next)}: ${money(total)}*`,
-        ...cards.map((c) => `• ${c.name}: ${money(items.filter((t) => t.accountId === c.id).reduce((s, t) => s + t.amount, 0))}`),
-        "",
-        "É a soma das compras e parcelas com data em " + monthName(next) + ". O fechamento da fatura ainda não é considerado.",
-      ].join("\n");
+      const lines = cards.map((c) => {
+        const next = c.upcoming[0] ?? (c.current ? { month: c.current.month, amount: Math.max(0, c.current.remaining) } : null);
+        return next ? `• ${c.name}: ${money(next.amount)} (fatura de ${monthName(next.month)})` : `• ${c.name}: nada lançado`;
+      });
+      return [`*Próximas faturas*`, ...lines, "", "Soma das compras e parcelas já lançadas; pode subir até o fechamento."].join("\n");
     }
 
     case "debts": {
