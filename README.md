@@ -71,6 +71,20 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## Agenda, dívidas e empréstimos
+
+- **Agenda** (contas a pagar e a receber): junta tudo que está pendente (lançamentos não pagos,
+  parcelas de empréstimo e faturas de cartão fechadas), agrupado em atrasadas, hoje, 7 dias, 30 dias
+  e até 90 dias, com o botão de marcar como pago.
+- **Dívidas e empréstimos:** cada empréstimo é uma conta do tipo "Empréstimo ou dívida". As
+  parcelas (Price ou SAC, calculadas em `src/domain/loans.ts`) são transferências da conta pagadora
+  para o empréstimo; os juros de cada parcela entram como gasto na data do vencimento. Também vale
+  para dinheiro que você emprestou (juros entram como receita).
+- **Simulador:** compara Price e SAC (parcela, total e juros) antes de contratar.
+- **Quitação antecipada:** registre o valor informado pelo banco; as parcelas futuras somem e a
+  diferença para o saldo vira encargo (pagou mais) ou ajuste de desconto (pagou menos, fora dos
+  relatórios). Tudo gravado num único comando, com chave contra envio duplicado.
+
 ## Contas
 
 Cada conta tem tipo (corrente, poupança, dinheiro, cartão ou **investimento**), instituição, cor e

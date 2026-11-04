@@ -35,7 +35,7 @@ export default async function CartaoPage({
     <CardDetailView
       card={card}
       invoice={selected}
-      payers={accounts.filter((a) => a.type !== "credit_card")}
+      payers={accounts.filter((a) => a.type !== "credit_card" && a.type !== "loan")}
       categories={categories.filter((c) => c.kind === "expense")}
       history={history}
       today={todayStr}

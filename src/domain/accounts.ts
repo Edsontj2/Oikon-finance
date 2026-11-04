@@ -4,6 +4,7 @@ export const accountTypes = {
   cash: "Dinheiro",
   credit_card: "Cartão de crédito",
   investment: "Investimento",
+  loan: "Empréstimo ou dívida",
 } as const;
 export type AccountType = keyof typeof accountTypes;
 
@@ -31,7 +32,16 @@ export const defaultIcon: Record<AccountType, AccountIcon> = {
   cash: "cash",
   credit_card: "card",
   investment: "chart",
+  loan: "building",
 };
+
+/** Tipos que a pessoa cria em Contas (empréstimo é criado pela tela de Dívidas). */
+export const userAccountTypes = (Object.keys(accountTypes) as AccountType[]).filter((t) => t !== "loan");
+
+/** Contas onde está o dinheiro do dia a dia (sem cartão e sem empréstimo). */
+export function isMoneyAccount(type: AccountType): boolean {
+  return type !== "credit_card" && type !== "loan";
+}
 
 export type AccountOption = { id: string; name: string; type: AccountType; archived?: boolean };
 

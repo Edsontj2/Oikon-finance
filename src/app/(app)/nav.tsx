@@ -3,15 +3,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeftRight, CreditCard, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Tags, Wallet } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, CreditCard, Ellipsis, HandCoins, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Tags, Wallet } from "lucide-react";
 
 const items = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
+  { href: "/agenda", label: "Agenda", icon: CalendarClock },
   { href: "/contas", label: "Contas", icon: Wallet },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
+  { href: "/dividas", label: "Dívidas", icon: HandCoins },
   { href: "/categorias", label: "Categorias", icon: Tags },
 ];
+
+/** Celular: 4 abas principais + "Mais" (o resto). */
+const bottomItems = [...items.filter((i) => ["/", "/lancamentos", "/agenda", "/contas"].includes(i.href)), { href: "/mais", label: "Mais", icon: Ellipsis }];
+const inMore = ["/cartoes", "/dividas", "/categorias", "/configuracoes", "/mais"];
 
 const PIN_KEY = "oikon:menu-fixo";
 
@@ -83,8 +89,13 @@ export function Navigation() {
         </button>
       </aside>
       <nav className="bottom-nav" aria-label="Navegação">
-        {items.map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} onClick={go(href)} className={`bottom-item ${isActive(current, href) ? "active" : ""}`}>
+        {bottomItems.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            onClick={go(href)}
+            className={`bottom-item ${(href === "/mais" ? inMore.some((h) => isActive(current, h)) : isActive(current, href)) ? "active" : ""}`}
+          >
             <Icon size={20} strokeWidth={1.75} aria-hidden />
             <span>{label}</span>
           </Link>

@@ -13,6 +13,7 @@ import { listCategories, listCategoryOptions } from "../categories";
 import { endOfMonthBalance, monthSummary, openInstallments, overdueAndDueSoon } from "../dashboard";
 import { searchTransactions } from "../transactions";
 import { listCards } from "../cards";
+import { listLoans } from "../loans";
 import { invoiceStatusLabel } from "@/domain/cards";
 
 const money = formatMoney;
@@ -54,7 +55,7 @@ export async function answerQuery(db: Db, userId: string, query: QueryKind, text
           )
           .join("\n\n");
       }
-      const money_ = accounts.filter((a) => a.type !== "credit_card");
+      const money_ = accounts.filter((a) => a.type !== "credit_card" && a.type !== "loan");
       const total = money_.reduce((s, a) => s + a.balance, 0);
       const lines = money_.map((a) => `• ${a.name}: ${money(a.balance)}`);
       return [`*Saldo nas contas hoje: ${money(total)}*`, ...lines, "", "Cartões não entram nessa soma (limite não é dinheiro)."].join("\n");
@@ -154,12 +155,21 @@ export async function answerQuery(db: Db, userId: string, query: QueryKind, text
 
     case "debts": {
       const items = await openInstallments(db, userId, todayStr);
-      if (!items.length) return "Nenhuma compra parcelada em aberto.";
-      const total = items.reduce((s, i) => s + i.remaining, 0);
-      return [
-        `*Parcelamentos em aberto: ${money(total)} a pagar*`,
-        ...items.slice(0, 10).map((i) => `• ${i.description}: ${i.settledCount}/${i.count} pagas · faltam ${money(i.remaining)} · termina em ${formatDate(i.lastDate)}`),
-      ].join("\n");
+      const loans = (await listLoans(db, userId, now)).filter((l) => !l.settledAt && l.kind === "borrowed");
+      if (!items.length && !loans.length) return "Nenhuma dívida ou compra parcelada em aberto.";
+      const out: string[] = [];
+      if (loans.length) {
+        out.push(`*Empréstimos: ${money(loans.reduce((s, l) => s + Math.max(0, -l.balance), 0))} devidos hoje*`);
+        for (const l of loans.slice(0, 10)) {
+          out.push(`• ${l.name}: ${l.paidCount}/${l.installments} pagas${l.next ? ` · próxima ${formatDate(l.next.date)} ${money(l.next.amount)}` : ""}${l.overdueCount ? ` · ${l.overdueCount} atrasada(s)` : ""}`);
+        }
+      }
+      if (items.length) {
+        if (out.length) out.push("");
+        out.push(`*Parcelamentos em aberto: ${money(items.reduce((s, i) => s + i.remaining, 0))} a pagar*`);
+        out.push(...items.slice(0, 10).map((i) => `• ${i.description}: ${i.settledCount}/${i.count} pagas · faltam ${money(i.remaining)} · termina em ${formatDate(i.lastDate)}`));
+      }
+      return out.join("\n");
     }
 
     case "forecast": {

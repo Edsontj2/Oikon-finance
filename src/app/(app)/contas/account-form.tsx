@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { accountColors, accountIcons, accountTypes, defaultIcon, type AccountType, type AccountWithBalance } from "@/domain/accounts";
+import { accountColors, accountIcons, accountTypes, defaultIcon, userAccountTypes, type AccountType, type AccountWithBalance } from "@/domain/accounts";
 import { LIMITS } from "@/domain/limits";
 import { MoneyInput } from "@/components/money-input";
 import { FormError } from "@/components/form-error";
@@ -39,8 +39,8 @@ export function AccountForm({
         <label>
           Tipo
           <select name="type" value={type} onChange={(e) => setType(e.target.value as AccountType)}>
-            {Object.entries(accountTypes).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+            {(type === "loan" ? (["loan"] as const) : userAccountTypes).map((value) => (
+              <option key={value} value={value}>{accountTypes[value]}</option>
             ))}
           </select>
         </label>

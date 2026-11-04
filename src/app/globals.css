@@ -582,3 +582,14 @@ button { font: inherit; color: inherit; }
 .choice input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
 .choice .swatch-dot { width: 22px; height: 22px; border-radius: 999px; }
 .archived-list { opacity: 0.75; }
+
+/* ---------- Dívidas e agenda ---------- */
+.loan-row { align-items: flex-start; cursor: default; }
+.loan-row .row-text { gap: 0.25rem; }
+.loan-schedule summary { cursor: pointer; color: var(--primary); font-size: 0.85rem; margin: 0.25rem 0; }
+.loan-table { font-size: 0.8rem; width: 100%; }
+.loan-table th, .loan-table td { padding: 0.3rem 0.5rem; text-align: right; white-space: nowrap; }
+.loan-table th:first-child, .loan-table td:first-child { text-align: left; }
+.bill-group h2 { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.bill-group h2 .hint { font-weight: 400; }
+.more-list a { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1rem; color: var(--foreground); text-decoration: none; }

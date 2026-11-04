@@ -61,7 +61,7 @@ export function buildInsights(input: InsightInput): Insight[] {
   }
 
   for (const account of input.accounts) {
-    if (account.balance < 0 && account.type !== "credit_card") {
+    if (account.balance < 0 && account.type !== "credit_card" && account.type !== "loan") {
       const left = account.overdraftLimit ? account.overdraftLimit + account.balance : null;
       out.push({
         tone: "bad",

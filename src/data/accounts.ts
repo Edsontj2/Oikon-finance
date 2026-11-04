@@ -81,6 +81,11 @@ export type AccountInput = {
 async function validateAccount(db: Db, userId: string, input: AccountInput, exceptId?: string) {
   const name = requiredText(input.name, LIMITS.accountName, "Informe o nome da conta.", "O nome da conta");
   if (!isAccountType(input.type)) throw new UserError("Tipo de conta inválido.");
+  // Conta de empréstimo nasce e muda de tipo só pela tela de Dívidas.
+  const current = exceptId ? (await db.query<{ type: string }>("SELECT type FROM accounts WHERE id = $1 AND user_id = $2", [exceptId, userId])).rows[0] : undefined;
+  if ((input.type === "loan") !== (current?.type === "loan")) {
+    throw new UserError(input.type === "loan" ? "Empréstimos são cadastrados em Dívidas." : "Essa conta é de um empréstimo: o tipo não pode mudar.");
+  }
   if (!Number.isSafeInteger(input.initialBalance)) throw new UserError("Saldo inicial inválido.");
   if (!isValidCents(input.initialBalance)) throw new UserError(TOO_BIG);
   const { rows } = await db.query(
