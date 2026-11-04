@@ -42,7 +42,7 @@ export async function saveTransaction(form: FormData): Promise<ActionResult> {
     const frequency = field(form, "frequency");
     await createTransaction(getDb(), userId, {
       ...transactionFromForm(form),
-      repeat: frequency === "monthly" ? wholeNumberField(form, "repeat", 1) : 1,
+      recurring: frequency === "monthly",
       installments: frequency === "installments" ? wholeNumberField(form, "installments", 0) : undefined,
       amountIsTotal: field(form, "amountIs") !== "installment",
       submissionKey: field(form, "submissionKey"),

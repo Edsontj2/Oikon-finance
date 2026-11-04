@@ -199,13 +199,11 @@ export function TransactionForm({
           </div>
           {freq === "installments" && <InstallmentFields date={date} cents={cents} onCard={onCard} />}
           {freq === "monthly" && (
-            <label>
-              Por quantos meses?
-              <input name="repeat" type="number" inputMode="numeric" min={2} max={MAX_REPEAT} step={1} defaultValue={12} required />
-              <span className="hint">
-                Mesmo valor todo mês, no mesmo dia (assinatura, aluguel). Os dos próximos meses ficam pendentes até você pagar.
-              </span>
-            </label>
+            <p className="hint">
+              Lança o mesmo valor todo mês, no mesmo dia (assinatura, aluguel), sem data para acabar. Cada mês aparece
+              quando chega, como pendente: o total pendente conta só o mês atual. Para parar, exclua o lançamento e
+              escolha &quot;Parar de repetir&quot;.
+            </p>
           )}
         </div>
       )}
@@ -214,7 +212,11 @@ export function TransactionForm({
           Parcela {transaction.installmentNumber} de {transaction.installmentCount}. A edição muda só esta parcela.
         </p>
       ) : (
-        editing && transaction?.seriesId && <p className="hint">Este lançamento faz parte de uma série mensal. A edição muda só este mês.</p>
+        editing && transaction?.recurringId ? (
+          <p className="hint">Repete todo mês. Editar o mês mais recente muda também os próximos; um mês antigo muda só ele.</p>
+        ) : (
+          editing && transaction?.seriesId && <p className="hint">Este lançamento faz parte de uma série mensal. A edição muda só este mês.</p>
+        )
       )}
 
       <FormError message={error} />

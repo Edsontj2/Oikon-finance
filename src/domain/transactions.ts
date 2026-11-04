@@ -30,6 +30,8 @@ export type Transaction = {
   categoryId: string | null;
   categoryName: string | null;
   seriesId: string | null;
+  /** "Todo mês" sem fim: id da regra que lança um por mês (null = não é recorrente). */
+  recurringId?: string | null;
   /** Compra parcelada: esta é a parcela `installmentNumber` de `installmentCount`. */
   installmentNumber: number | null;
   installmentCount: number | null;

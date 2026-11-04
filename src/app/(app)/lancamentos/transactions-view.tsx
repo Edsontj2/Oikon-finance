@@ -186,14 +186,16 @@ function DeleteTransaction({ transaction, onClose }: { transaction: Transaction 
           <>
             <strong>{transaction.description}</strong> de {formatDate(transaction.date)} será apagado. Isso não pode ser
             desfeito.
-            {transaction.seriesId && " Ele faz parte de uma série mensal."}
+            {transaction.recurringId
+              ? " Ele repete todo mês: apague só este mês ou pare de repetir (apaga este e os próximos)."
+              : transaction.seriesId && " Ele faz parte de uma série mensal."}
           </>
         )
       }
     >
       {transaction?.seriesId && (
         <button type="button" className="btn btn-danger" disabled={remove.pending} onClick={() => remove.run(transaction.id, "future")}>
-          Este e os próximos
+          {transaction.recurringId ? "Parar de repetir" : "Este e os próximos"}
         </button>
       )}
       <button
@@ -202,7 +204,7 @@ function DeleteTransaction({ transaction, onClose }: { transaction: Transaction 
         disabled={remove.pending}
         onClick={() => transaction && remove.run(transaction.id, "one")}
       >
-        {transaction?.seriesId ? "Só este" : "Excluir"}
+        {transaction?.recurringId ? "Só este mês" : transaction?.seriesId ? "Só este" : "Excluir"}
       </button>
     </ConfirmDialog>
   );

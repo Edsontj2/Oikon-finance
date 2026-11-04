@@ -41,9 +41,10 @@ test("janela: erro mantém o que foi digitado; Esc fecha; reabrir começa limpo"
   expect(n[0].n).toBe(0);
 });
 
-test("excluir pede confirmação; Cancelar e Esc não apagam; 'Este e os próximos' apaga a série a partir dali", async ({ page }) => {
+test("excluir pede confirmação; Cancelar e Esc não apagam; 'Parar de repetir' apaga a partir dali e para", async ({ page }) => {
   await signup(page);
-  await lancar(page, { descricao: "Streaming", valor: "30,00", data: "2026-08-10", repetir: 4 });
+  // Começou em agosto: ao abrir o app em novembro, setembro, outubro e novembro já foram lançados.
+  await lancar(page, { descricao: "Streaming", valor: "30,00", data: "2026-08-10", repetir: true });
   await expect(linhas(page)).toHaveCount(4);
   // Abre a parcela de setembro (2ª mais antiga)
   await page.getByRole("button", { name: "Editar Streaming" }).nth(2).click();
@@ -62,8 +63,10 @@ test("excluir pede confirmação; Cancelar e Esc não apagam; 'Este e os próxim
   await page.getByRole("button", { name: "Editar Streaming" }).nth(2).click();
   await expect(dialog(page).getByLabel("Data")).toHaveValue("2026-09-10");
   await dialog(page).getByRole("button", { name: "Excluir lançamento" }).click();
-  await dialog(page).getByRole("button", { name: "Este e os próximos" }).click();
+  await dialog(page).getByRole("button", { name: "Parar de repetir" }).click();
   await expectToast(page, "Lançamentos excluídos.");
+  await expect(linhas(page)).toHaveCount(1);
+  await page.reload();
   await expect(linhas(page)).toHaveCount(1);
   await expect(linhas(page).first()).toContainText("10/08/2026");
   await expectSaldos(page, -30, { Carteira: -30 });

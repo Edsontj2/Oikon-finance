@@ -48,8 +48,8 @@ export type Draft = {
   date: string;
   /** false: conta a pagar/receber agendada (fica pendente; agendar não é pagar). */
   paid: boolean;
-  /** "todo dia 5": quantos meses repetir. */
-  repeatMonths: number | null;
+  /** "todo dia 5": repete todo mês, sem fim, até a pessoa excluir. */
+  monthly: boolean;
 };
 
 /** Minúsculas, sem acentos e com espaços simples: para comparar, nunca para mostrar. */
@@ -305,7 +305,7 @@ export function buildDraft(
   let date = findDate(n, ctx.now);
   // Agendar "para dia 5" quando hoje já é dia 20: é o dia 5 do mês que vem.
   if (scheduled && date < today(ctx.now) && /\bdia \d{1,2}\b/.test(n)) date = addMonths(date, 1);
-  const repeatMonths = scheduled && /\btodo (dia|mes)\b/.test(n) ? 12 : null;
+  const monthly = scheduled && /\btodo (dia|mes)\b/.test(n);
   if (scheduled) description = description.replace(/^(Adicionar|Cadastrar|Lembrar de pagar|Lembrar|Agendar)\s*/i, "").replace(/^(conta de|a conta de)\s*/i, "") || description;
   return {
     operation,
@@ -317,7 +317,7 @@ export function buildDraft(
     installments,
     date,
     paid: !scheduled,
-    repeatMonths,
+    monthly,
   };
 }
 

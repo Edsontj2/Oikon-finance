@@ -32,6 +32,8 @@ export type TransactionInput = {
 export type NewTransaction = TransactionInput & {
   /** Quantas vezes lançar, uma por mês (1 = só este mês). */
   repeat?: number;
+  /** "Todo mês" sem fim: lança este e, a cada mês que chega, mais um, até excluir. */
+  recurring?: boolean;
   /** Compra parcelada em N vezes (não junto com `repeat`). */
   installments?: number;
   /** Com `installments`: o valor informado é o total da compra (senão, é o de cada parcela). */
@@ -108,14 +110,19 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
   const tx = await validateTransaction(db, userId, input, cardKind);
   if (cardKind !== null || invoiceMonth !== null) await validateCardFields(db, userId, tx, cardKind, invoiceMonth);
   const isAdjustment = input.isAdjustment === true;
-  if (isAdjustment && (tx.type === "transfer" || cardKind !== null || repeat !== 1 || input.installments !== undefined)) {
+  const recurring = input.recurring === true;
+  if (isAdjustment && (tx.type === "transfer" || cardKind !== null || repeat !== 1 || input.installments !== undefined || recurring)) {
     throw new UserError("Ajuste de conciliação inválido.");
+  }
+  if (recurring && (repeat !== 1 || input.installments !== undefined || cardKind !== null || invoiceMonth !== null)) {
+    throw new UserError("Escolha só uma forma de repetir.");
   }
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > MAX_REPEAT) {
     throw new UserError(`Repetir deve ser entre 1 e ${MAX_REPEAT} meses.`);
   }
   const rows = input.installments === undefined ? repeatRows(tx, repeat) : await installmentRows(db, userId, tx, input);
-  const seriesId = rows.dates.length > 1 ? randomUUID() : null;
+  // Recorrente: a regra e o primeiro lançamento usam o mesmo id (série = regra).
+  const seriesId = rows.dates.length > 1 || recurring ? randomUUID() : null;
 
   try {
     // Um único comando: grava a chave do formulário e os lançamentos juntos.
@@ -124,11 +131,18 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
       `WITH claim AS (
          INSERT INTO form_submissions (user_id, key) SELECT $1, $11::uuid WHERE $11::uuid IS NOT NULL
          ON CONFLICT DO NOTHING RETURNING 1
+       ), rule AS (
+         INSERT INTO recurring_rules
+           (id, user_id, type, description, amount_cents, account_id, to_account_id, category_id, day, generated_through)
+         SELECT $7::uuid, $1, $2, $3, ($10::bigint[])[1], $4, $5, $6,
+                extract(day FROM ($8::date[])[1]), date_trunc('month', ($8::date[])[1])::date
+          WHERE $17::boolean AND ($11::uuid IS NULL OR EXISTS (SELECT 1 FROM claim))
        )
        INSERT INTO transactions
          (user_id, type, description, amount_cents, date, paid, account_id, to_account_id, category_id, series_id,
-          installment_number, installment_count, card_kind, invoice_month, is_adjustment)
-       SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12, $14, $15, $16
+          installment_number, installment_count, card_kind, invoice_month, is_adjustment, recurring_id)
+       SELECT $1, $2, $3, d.amount, d.date, d.paid, $4, $5, $6, $7, d.number, $12, $14, $15, $16,
+              CASE WHEN $17::boolean THEN $7::uuid END
          FROM unnest($8::date[], $9::boolean[], $10::bigint[], $13::smallint[]) AS d(date, paid, amount, number)
         WHERE $11::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
        RETURNING id`,
@@ -136,7 +150,7 @@ export async function createTransaction(db: Db, userId: string, input: NewTransa
         userId, tx.type, tx.description, tx.accountId, tx.toAccountId, tx.categoryId, seriesId,
         rows.dates, rows.paid, rows.amounts, submissionKey(input.submissionKey),
         rows.numbers ? rows.dates.length : null, rows.numbers ?? rows.dates.map(() => null),
-        cardKind, invoiceMonth, isAdjustment,
+        cardKind, invoiceMonth, isAdjustment, recurring,
       ],
     );
     return inserted.map((r) => r.id);
@@ -209,17 +223,30 @@ export async function updateTransaction(
   const tx = await validateTransaction(db, userId, input, cardKind);
   if (cardKind !== null) await validateCardFields(db, userId, tx, cardKind, null);
   try {
-    const { rowCount } = await db.query(
-      `UPDATE transactions
-          SET type = $3, description = $4, amount_cents = $5, date = $6, paid = $7,
-              account_id = $8, to_account_id = $9, category_id = $10
-        WHERE id = $1 AND user_id = $2`,
+    // Recorrente: editar o lançamento mais recente muda também os próximos meses (novo preço,
+    // outra conta). Editar um mês antigo muda só ele.
+    const { rows } = await db.query<{ n: number }>(
+      `WITH upd AS (
+         UPDATE transactions
+            SET type = $3, description = $4, amount_cents = $5, date = $6, paid = $7,
+                account_id = $8, to_account_id = $9, category_id = $10
+          WHERE id = $1 AND user_id = $2
+         RETURNING id, recurring_id
+       ), rule AS (
+         UPDATE recurring_rules r
+            SET type = $3, description = $4, amount_cents = $5, account_id = $8, to_account_id = $9, category_id = $10
+           FROM upd, transactions old
+          WHERE r.id = upd.recurring_id AND r.user_id = $2 AND old.id = upd.id
+            AND NOT EXISTS (SELECT 1 FROM transactions o WHERE o.recurring_id = r.id AND o.id <> old.id AND o.date > old.date)
+         RETURNING 1
+       )
+       SELECT count(*)::int AS n FROM upd`,
       [
         transactionId, userId, tx.type, tx.description, tx.amount, tx.date, tx.paid,
         tx.accountId, tx.toAccountId, tx.categoryId,
       ],
     );
-    if (!rowCount) throw new UserError("Lançamento não encontrado.");
+    if (!rows[0]?.n) throw new UserError("Lançamento não encontrado.");
   } catch (err) {
     throw toUserError(err);
   }
@@ -263,7 +290,7 @@ const selectColumns = `
   t.id, t.type, t.description, t.amount_cents, to_char(t.date, 'YYYY-MM-DD') AS date, t.paid,
   t.account_id, a.name AS account_name, t.to_account_id, ta.name AS to_account_name,
   t.category_id, c.name AS category_name, t.series_id, t.installment_number, t.installment_count,
-  t.card_kind, t.invoice_month, t.is_adjustment
+  t.card_kind, t.invoice_month, t.is_adjustment, t.recurring_id
   FROM transactions t
   JOIN accounts a ON a.id = t.account_id
   LEFT JOIN accounts ta ON ta.id = t.to_account_id
@@ -322,6 +349,7 @@ function mapTransaction(r: Record<string, unknown>): Transaction {
     cardKind: (r.card_kind as Transaction["cardKind"]) ?? null,
     invoiceMonth: (r.invoice_month as string) ?? null,
     isAdjustment: r.is_adjustment === true,
+    recurringId: (r.recurring_id as string) ?? null,
   };
 }
 
@@ -352,8 +380,14 @@ export async function deleteTransaction(
 ): Promise<number> {
   assertUuid(transactionId, "Lançamento não encontrado.");
   if (scope === "future") {
+    // Recorrente: além de apagar este e os seguintes, desliga a regra (não lança mais nada).
     const { rowCount } = await db.query(
-      `DELETE FROM transactions t
+      `WITH stop AS (
+         UPDATE recurring_rules r SET active = false
+           FROM transactions ref
+          WHERE ref.id = $1 AND ref.user_id = $2 AND r.id = ref.recurring_id AND r.user_id = $2
+       )
+       DELETE FROM transactions t
         USING transactions ref
         WHERE ref.id = $1 AND ref.user_id = $2
           AND t.user_id = $2

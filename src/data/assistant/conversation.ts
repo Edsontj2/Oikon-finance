@@ -26,6 +26,12 @@ import { createTransaction, searchTransactions, setPaid } from "../transactions"
 import { getLinkByPhone, redeemLinkCode, type WhatsappLink } from "./link";
 import { answerQuery } from "./queries";
 import { listCards } from "../cards";
+import { ensureRecurring } from "../recurring";
+
+/** "Todo mês" (rascunhos antigos guardavam `repeatMonths`). */
+function isMonthly(draft: { monthly?: boolean; repeatMonths?: number | null }): boolean {
+  return draft.monthly === true || (draft.repeatMonths ?? 0) > 1;
+}
 
 /** Quanto tempo uma operação espera confirmação. */
 export const PENDING_MINUTES = 15;
@@ -118,6 +124,7 @@ async function finish(db: Db, id: string, userId: string | null, reply: string |
 
 async function respond(db: Db, link: WhatsappLink, text: string, n: string, intent: ReturnType<typeof detectIntent>, now: Date): Promise<string> {
   const userId = link.userId;
+  await ensureRecurring(db, userId, now);
   const pending = await openPending(db, userId);
 
   switch (intent.kind) {
@@ -236,7 +243,7 @@ function confirmationText(draft: PendingDraft, accounts: AccountRef[], categorie
     draft.operation === "transfer" ? null : `Categoria: ${categories.find((c) => c.id === draft.categoryId)?.name ?? "Sem categoria"}`,
     draft.operation === "transfer" ? `De: ${name(draft.accountId)}` : `${draft.operation === "income" ? "Conta" : isCard ? "Cartão" : "Conta"}: ${name(draft.accountId)}${account ? ` (${accountTypes[account.type as keyof typeof accountTypes] ?? account.type})` : ""}`,
     draft.operation === "transfer" ? `Para: ${name(draft.destinationAccountId)}` : null,
-    `Data: ${formatDate(draft.date)}${draft.repeatMonths ? ` · repete todo mês (${draft.repeatMonths} meses)` : ""}`,
+    `Data: ${formatDate(draft.date)}${isMonthly(draft) ? " · repete todo mês, até você excluir no app" : ""}`,
     "",
     "Responda *sim* para confirmar ou *não* para cancelar.",
   ];
@@ -271,7 +278,7 @@ async function execute(db: Db, userId: string, pending: PendingOp, now: Date): P
       categoryId: draft.categoryId,
       installments: draft.installments ?? undefined,
       amountIsTotal: true,
-      repeat: draft.installments ? undefined : draft.repeatMonths ?? 1,
+      recurring: !draft.installments && isMonthly(draft),
       submissionKey: pending.id,
     });
     await db.query("UPDATE whatsapp_pending_ops SET transaction_ids = $2 WHERE id = $1", [pending.id, ids]);

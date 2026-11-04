@@ -73,13 +73,13 @@ test("fluxo completo: contas, lançamentos, pendentes, transferência, categoria
   await expectToast(page, "Lançamento excluído.");
   await expectSaldos(page, 2300, { Banco: 1800 });
 
-  // Repetir todo mês: este mês pago, os próximos pendentes.
-  await lancar(page, { descricao: "Academia", valor: "100", conta: "Carteira", repetir: 3 });
+  // Todo mês, sem fim: só o mês atual existe; os próximos aparecem quando o mês chega.
+  await lancar(page, { descricao: "Academia", valor: "100", conta: "Carteira", repetir: true });
   await expectSaldos(page, 2200, { Carteira: 400 });
   await page.goto("/lancamentos");
   const academia = page.getByTestId("lancamento").filter({ hasText: "Academia" });
-  await expect(academia).toHaveCount(3);
-  await expect(academia.getByRole("button", { name: /pendente · pagar/ })).toHaveCount(2);
+  await expect(academia).toHaveCount(1);
+  await expect(academia.getByLabel("mensal")).toBeVisible();
 
   // Categoria com limite: a página avisa quando passa.
   await page.goto("/categorias");

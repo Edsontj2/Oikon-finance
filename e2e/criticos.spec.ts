@@ -57,19 +57,19 @@ test("muitas tentativas de login com senha errada são bloqueadas", async ({ pag
   await expect(await tryWrongPassword()).toContainText("Muitas tentativas");
 });
 
-test("formulário adulterado: repetir=1000 e valor negativo dão mensagem, nada é lançado", async ({ page }) => {
+test("formulário adulterado: parcelas=1000 e valor negativo dão mensagem, nada é lançado", async ({ page }) => {
   await signup(page);
   await page.goto("/lancamentos");
   await page.getByRole("button", { name: "Novo lançamento" }).first().click();
-  await preencherLancamento(page, { descricao: "Hack", valor: "10", repetir: 2 });
+  await preencherLancamento(page, { descricao: "Hack", valor: "10", parcelas: 2 });
   await dialog(page)
-    .locator("[name=repeat]")
+    .locator("[name=installments]")
     .evaluate((el: HTMLInputElement) => {
       el.removeAttribute("max");
       el.value = "1000";
     });
   await dialog(page).getByRole("button", { name: "Salvar lançamento" }).click();
-  await expect(dialog(page).getByRole("alert")).toHaveText("Repetir deve ser entre 1 e 60 meses.");
+  await expect(dialog(page).getByRole("alert")).toHaveText("Parcelas devem ser entre 2 e 60.");
   await dialog(page).getByRole("radio", { name: "Uma vez" }).click();
   await dialog(page).getByLabel("Valor (R$)").fill("R$-5");
   await dialog(page).getByRole("button", { name: "Salvar lançamento" }).click();

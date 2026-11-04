@@ -47,7 +47,8 @@ export type Lancamento = {
   categoria?: string;
   data?: string;
   pago?: boolean;
-  repetir?: number;
+  /** "Todo mês", sem fim. */
+  repetir?: boolean;
   parcelas?: number;
   /** Com `parcelas`: o valor digitado é o de cada parcela (padrão: total da compra). */
   valorPorParcela?: boolean;
@@ -66,7 +67,6 @@ export async function preencherLancamento(page: Page, l: Lancamento) {
   if (l.pago !== undefined) await d.locator("[name=paid]").setChecked(l.pago);
   if (l.repetir) {
     await d.getByRole("radio", { name: "Todo mês" }).click();
-    await d.getByLabel("Por quantos meses?").fill(String(l.repetir));
   }
   if (l.parcelas) {
     await d.getByRole("radio", { name: "Parcelado" }).click();

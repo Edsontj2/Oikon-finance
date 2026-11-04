@@ -80,9 +80,9 @@ describe("lançamentos", () => {
 
   it("agendar conta a pagar: fica pendente, dia que já passou vai para o mês que vem, 'todo dia' repete", () => {
     expect(draft("Adicionar conta de energia de 180 reais para dia 15")).toMatchObject({
-      operation: "expense", amount: 18000, date: "2026-11-15", paid: false, repeatMonths: null, categoryId: "casa",
+      operation: "expense", amount: 18000, date: "2026-11-15", paid: false, monthly: false, categoryId: "casa",
     });
-    expect(draft("Cadastrar aluguel de 1200 todo dia 2")).toMatchObject({ date: "2026-12-02", paid: false, repeatMonths: 12 });
+    expect(draft("Cadastrar aluguel de 1200 todo dia 2")).toMatchObject({ date: "2026-12-02", paid: false, monthly: true });
   });
 
   it("datas: ontem e dd/mm", () => {
