@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
-const publicPaths = ["/login", "/cadastro"];
+const publicPaths = ["/login", "/cadastro", "/privacidade", "/termos", "/exclusao-de-dados"];
 
 function contentSecurityPolicy(nonce: string, https: boolean): string {
   const dev = process.env.NODE_ENV !== "production";

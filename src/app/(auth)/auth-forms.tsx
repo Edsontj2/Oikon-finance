@@ -53,6 +53,7 @@ export function SignupForm() {
         </button>
       </form>
       <p className="auth-foot">Já tem conta? <Link href="/login">Entrar</Link></p>
+      <p className="auth-foot">Ao criar a conta você concorda com os <Link href="/termos">Termos</Link> e a <Link href="/privacidade">Política de Privacidade</Link>.</p>
     </>
   );
 }

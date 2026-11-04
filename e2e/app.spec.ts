@@ -126,3 +126,11 @@ test("login errado é recusado e outra pessoa não vê os dados da primeira", as
   await page.goto("/contas");
   await expect(page.getByTestId("conta")).toHaveCount(1);
 });
+
+test("páginas de privacidade, termos e exclusão de dados abrem sem login", async ({ page }) => {
+  for (const [path, title] of [["/privacidade", "Política de Privacidade"], ["/termos", "Termos de uso"], ["/exclusao-de-dados", "Como excluir seus dados"]] as const) {
+    await page.goto(path);
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  }
+});
