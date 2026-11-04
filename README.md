@@ -108,6 +108,8 @@ Conversa com o mesmo backend do app: não tem lógica financeira própria. A men
 4. Em *Configurações do app → Básico*, copie a **chave secreta do app**.
 5. Preencha as variáveis `WHATSAPP_*` (veja `.env.example`) no projeto da Vercel e publique de novo.
 
+Passo a passo detalhado: [docs/configurar-whatsapp.md](docs/configurar-whatsapp.md).
+
 Respostas são enviadas dentro da janela de atendimento de 24 horas aberta pela mensagem da pessoa. Lembretes fora dessa janela exigem modelos de mensagem aprovados pela Meta (próxima etapa).
 
 ## Deploy (Vercel)
