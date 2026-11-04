@@ -10,6 +10,7 @@ import { MoneyInput } from "@/components/money-input";
 import { FormError } from "@/components/form-error";
 import { useServerAction } from "@/components/use-server-action";
 import { LIMITS } from "@/domain/limits";
+import { sortedCategoryOptions } from "@/domain/categories";
 import { saveTransaction } from "../actions";
 
 const typeLabels: Record<TransactionType, string> = { expense: "Saída", income: "Entrada", transfer: "Transferência" };
@@ -71,7 +72,7 @@ export function TransactionForm({
   const onCard = accounts.find((a) => a.id === accountId)?.type === "credit_card";
   // Transferência não parcela: se estava em "parcelado", volta para "uma vez".
   const freq: Frequency = isTransfer && frequency === "installments" ? "once" : frequency;
-  const categoryOptions = categories.filter((c) => c.kind === type);
+  const categoryOptions = sortedCategoryOptions(categories).filter((c) => c.kind === type);
   // Arquivadas só aparecem se já são deste lançamento (para editar um antigo sem perder a conta).
   const usable = accounts.filter((a) => !a.archived || a.id === transaction?.accountId || a.id === transaction?.toAccountId);
   const destinations = usable.filter((a) => a.id !== accountId);
@@ -161,7 +162,7 @@ export function TransactionForm({
             <select name="categoryId" key={type} defaultValue={transaction?.type === type ? transaction.categoryId ?? "" : ""}>
               <option value="">Sem categoria</option>
               {categoryOptions.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>
           </label>

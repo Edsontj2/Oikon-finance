@@ -3,6 +3,7 @@ import { currentMonth, monthRange, shiftMonth, today } from "@/lib/dates";
 import { buildInsights, type Insight } from "@/domain/insights";
 import { listAccounts, type AccountWithBalance } from "./accounts";
 import { listCategories, type Category } from "./categories";
+import { groupCategories } from "@/domain/categories";
 import { listTransactions, type Transaction } from "./transactions";
 
 /**
@@ -186,7 +187,7 @@ async function uncategorizedExpense(db: Db, userId: string, month: string, today
 }
 
 /** Saídas (pagas e pendentes) dos 3 meses anteriores, no total e por categoria. */
-async function expenseHistory(db: Db, userId: string, month: string) {
+export async function expenseHistory(db: Db, userId: string, month: string) {
   const months = [3, 2, 1].map((n) => shiftMonth(month, -n));
   const { rows } = await db.query(
     `SELECT to_char(date, 'YYYY-MM') AS month, category_id, SUM(amount_cents) AS total
@@ -216,7 +217,12 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
     monthlyFlow(db, userId, month),
   ]);
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
-  const expenseCategories = categories.filter((c) => c.kind === "expense");
+  // Subcategorias entram no total da categoria principal (o limite da principal vale para o grupo).
+  const expenseCategories = groupCategories(categories.filter((c) => c.kind === "expense")).map(({ children, group, ...c }) => ({
+    ...c,
+    ...group,
+    childIds: children.map((k) => k.id),
+  }));
 
   const insights = buildInsights({
     month,
@@ -236,7 +242,7 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
       name: c.name,
       monthTotal: c.monthTotal,
       monthlyLimit: c.monthlyLimit,
-      previousAverage: history.categoryAverage(c.id),
+      previousAverage: [c.id, ...c.childIds].reduce((s, id) => s + history.categoryAverage(id), 0),
     })),
   });
 
@@ -245,7 +251,7 @@ export async function getDashboard(db: Db, userId: string, month: string, now = 
     accounts,
     month: summary,
     overdue: pending.overdue,
-    expenseCategories: expenseCategories.filter((c) => c.monthTotal > 0 || c.monthlyLimit !== null),
+    expenseCategories: expenseCategories.filter((c) => c.monthTotal > 0 || c.monthlyLimit !== null).map(({ childIds: _ids, ...c }) => c),
     uncategorized,
     recent,
     insights,

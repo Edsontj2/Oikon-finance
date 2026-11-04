@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
-import type { Category, CategoryKind } from "@/domain/categories";
+import { groupCategories, type Category, type CategoryKind } from "@/domain/categories";
 import { Money } from "@/components/money";
 import { Modal } from "@/components/modal";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -18,7 +18,11 @@ export function CategoriesView({ categories, monthNav }: { categories: Category[
   const remove = useServerAction(removeCategory, () => setDeleting(null));
 
   const section = (kind: CategoryKind, title: string) => {
-    const items = categories.filter((c) => c.kind === kind);
+    // Cada categoria principal com o total do grupo, seguida das subcategorias.
+    const rows = groupCategories(categories.filter((c) => c.kind === kind)).flatMap((g) => [
+      { c: g as Category, totals: g.group, child: false },
+      ...g.children.map((c) => ({ c, totals: c, child: true })),
+    ]);
     return (
       <section className="list-group">
         <div className="list-group-head">
@@ -27,29 +31,29 @@ export function CategoriesView({ categories, monthNav }: { categories: Category[
             <Plus size={16} aria-hidden /> Adicionar
           </button>
         </div>
-        {items.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="card empty"><p>Nenhuma categoria.</p></div>
         ) : (
           <ul className="list card">
-            {items.map((c) => (
-              <li key={c.id} className="row" data-testid="categoria">
+            {rows.map(({ c, totals, child }) => (
+              <li key={c.id} className={`row ${child ? "row-child" : ""}`} data-testid="categoria">
                 <button type="button" className="row-main" onClick={() => setEditing(c)} aria-label={`Editar categoria ${c.name}`}>
                   <span className="row-text">
-                    <span className="row-title">{c.name}</span>
+                    <span className="row-title">{child && <span className="muted" aria-hidden>↳ </span>}{c.name}</span>
                     <span className="row-sub">
-                      {c.pendingTotal > 0 ? (
+                      {totals.pendingTotal > 0 ? (
                         <>
-                          <Money cents={c.paidTotal} /> {kind === "expense" ? "pago" : "recebido"} + <Money cents={c.pendingTotal} /> pendente
+                          <Money cents={totals.paidTotal} /> {kind === "expense" ? "pago" : "recebido"} + <Money cents={totals.pendingTotal} /> pendente
                         </>
                       ) : (
-                        <><Money cents={c.paidTotal} /> no mês</>
+                        <><Money cents={totals.paidTotal} /> no mês</>
                       )}
                       {c.monthlyLimit !== null && <> · limite <Money cents={c.monthlyLimit} /></>}
-                      {c.monthlyLimit !== null && c.monthTotal > c.monthlyLimit && (
+                      {c.monthlyLimit !== null && totals.monthTotal > c.monthlyLimit && (
                         <> <span className="tag tag-late">acima do limite</span></>
                       )}
                     </span>
-                    {c.monthlyLimit !== null && <LimitBar total={c.monthTotal} limit={c.monthlyLimit} />}
+                    {c.monthlyLimit !== null && <LimitBar total={totals.monthTotal} limit={c.monthlyLimit} />}
                   </span>
                   <span className="row-value">
                     <ChevronRight size={16} className="row-chevron" aria-hidden />
@@ -76,13 +80,13 @@ export function CategoriesView({ categories, monthNav }: { categories: Category[
       {section("income", "Entradas")}
 
       <Modal open={creating !== null} onClose={() => setCreating(null)} title="Nova categoria">
-        {creating && <CategoryForm defaultKind={creating} onDone={() => setCreating(null)} onCancel={() => setCreating(null)} />}
+        {creating && <CategoryForm categories={categories} defaultKind={creating} onDone={() => setCreating(null)} onCancel={() => setCreating(null)} />}
       </Modal>
 
       <Modal open={editing !== null} onClose={() => setEditing(null)} title="Editar categoria">
         {editing && (
           <>
-            <CategoryForm category={editing} onDone={() => setEditing(null)} onCancel={() => setEditing(null)} />
+            <CategoryForm category={editing} categories={categories} onDone={() => setEditing(null)} onCancel={() => setEditing(null)} />
             <div className="danger-zone">
               <button
                 type="button"

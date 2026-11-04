@@ -72,9 +72,12 @@ export async function answerQuery(db: Db, userId: string, query: QueryKind, text
       const categories = await listCategoryOptions(db, userId);
       const category = findCategory(n, categories, "expense");
       if (category) {
-        const row = (await listCategories(db, userId, month, now)).find((c) => c.id === category.id);
-        const paid = row?.paidTotal ?? 0;
-        const pending = row?.pendingTotal ?? 0;
+        // Categoria principal: soma as subcategorias junto.
+        const all = await listCategories(db, userId, month, now);
+        const row = all.find((c) => c.id === category.id);
+        const group = all.filter((c) => c.id === category.id || c.parentId === category.id);
+        const paid = group.reduce((s, c) => s + c.paidTotal, 0);
+        const pending = group.reduce((s, c) => s + c.pendingTotal, 0);
         return `*${category.name} em ${monthName(month)}: ${money(paid)}* pagos${pending ? `\n+ ${money(pending)} pendentes` : ""}${row?.monthlyLimit ? `\nLimite do mês: ${money(row.monthlyLimit)}` : ""}`;
       }
       const s = await monthSummary(db, userId, month, now);

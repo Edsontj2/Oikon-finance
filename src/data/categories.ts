@@ -17,7 +17,7 @@ export { categoryKinds, isCategoryKind, type Category, type CategoryKind, type C
 export async function listCategories(db: Db, userId: string, month: string, now = new Date()): Promise<Category[]> {
   const { start, end } = monthRange(month);
   const { rows } = await db.query(
-    `SELECT c.id, c.name, c.kind, c.monthly_limit_cents,
+    `SELECT c.id, c.name, c.kind, c.monthly_limit_cents, c.parent_id,
             COALESCE(SUM(t.amount_cents) FILTER (WHERE t.paid AND t.date <= $4::date), 0) AS paid_total,
             COALESCE(SUM(t.amount_cents) FILTER (WHERE NOT (t.paid AND t.date <= $4::date)), 0) AS pending_total
        FROM categories c
@@ -32,6 +32,7 @@ export async function listCategories(db: Db, userId: string, month: string, now 
     id: r.id,
     name: r.name,
     kind: r.kind,
+    parentId: r.parent_id ?? null,
     monthlyLimit: r.monthly_limit_cents === null ? null : num(r.monthly_limit_cents),
     paidTotal: num(r.paid_total),
     pendingTotal: num(r.pending_total),
@@ -42,13 +43,13 @@ export async function listCategories(db: Db, userId: string, month: string, now 
 /** Só id, nome e tipo (para listas de seleção). */
 export async function listCategoryOptions(db: Db, userId: string): Promise<CategoryOption[]> {
   const { rows } = await db.query<CategoryOption>(
-    "SELECT id, name, kind FROM categories WHERE user_id = $1 ORDER BY name",
+    `SELECT id, name, kind, parent_id AS "parentId" FROM categories WHERE user_id = $1 ORDER BY name`,
     [userId],
   );
   return rows;
 }
 
-type CategoryFields = { name: string; monthlyLimit: number | null };
+type CategoryFields = { name: string; monthlyLimit: number | null; parentId?: string | null };
 
 async function validateCategory(db: Db, userId: string, kind: CategoryKind, input: CategoryFields, exceptId?: string) {
   const name = requiredText(input.name, LIMITS.categoryName, "Informe o nome da categoria.", "O nome da categoria");
@@ -65,7 +66,24 @@ async function validateCategory(db: Db, userId: string, kind: CategoryKind, inpu
     [userId, kind, name, exceptId ?? null],
   );
   if (rows.length) throw new UserError("Já existe uma categoria com esse nome.");
-  return { name, monthlyLimit: input.monthlyLimit };
+  // Sem `parentId` na edição: mantém a categoria principal que já tinha.
+  const parentId = input.parentId === undefined ? undefined : input.parentId || null;
+  if (parentId) {
+    assertUuid(parentId, "Categoria principal não encontrada.");
+    if (parentId === exceptId) throw new UserError("Uma categoria não pode ficar dentro dela mesma.");
+    const parent = await db.query<{ kind: string; parent_id: string | null }>(
+      "SELECT kind, parent_id FROM categories WHERE id = $1 AND user_id = $2",
+      [parentId, userId],
+    );
+    if (!parent.rows[0]) throw new UserError("Categoria principal não encontrada.");
+    if (parent.rows[0].kind !== kind) throw new UserError("A subcategoria precisa ser do mesmo tipo (entrada ou saída) da principal.");
+    if (parent.rows[0].parent_id) throw new UserError("Escolha uma categoria principal (subcategoria não pode ter subcategoria).");
+    if (exceptId) {
+      const kids = await db.query("SELECT 1 FROM categories WHERE parent_id = $1 LIMIT 1", [exceptId]);
+      if (kids.rows.length) throw new UserError("Esta categoria tem subcategorias, então não pode ficar dentro de outra.");
+    }
+  }
+  return { name, monthlyLimit: input.monthlyLimit, parentId };
 }
 
 export async function createCategory(
@@ -83,10 +101,10 @@ export async function createCategory(
          INSERT INTO form_submissions (user_id, key) SELECT $1, $5::uuid WHERE $5::uuid IS NOT NULL
          ON CONFLICT DO NOTHING RETURNING 1
        )
-       INSERT INTO categories (user_id, name, kind, monthly_limit_cents)
-       SELECT $1, $2, $3, $4 WHERE $5::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
+       INSERT INTO categories (user_id, name, kind, monthly_limit_cents, parent_id)
+       SELECT $1, $2, $3, $4, $6 WHERE $5::uuid IS NULL OR EXISTS (SELECT 1 FROM claim)
        RETURNING id`,
-      [userId, category.name, input.kind, category.monthlyLimit, key],
+      [userId, category.name, input.kind, category.monthlyLimit, key, category.parentId ?? null],
     );
     return rows[0]?.id ?? null;
   } catch (err) {
@@ -105,11 +123,13 @@ export async function updateCategory(db: Db, userId: string, categoryId: string,
   if (!rows[0]) throw new UserError("Categoria não encontrada.");
   const category = await validateCategory(db, userId, rows[0].kind, input, categoryId);
   try {
-    await db.query("UPDATE categories SET name = $3, monthly_limit_cents = $4 WHERE id = $1 AND user_id = $2", [
+    await db.query("UPDATE categories SET name = $3, monthly_limit_cents = $4, parent_id = CASE WHEN $6 THEN $5::uuid ELSE parent_id END WHERE id = $1 AND user_id = $2", [
       categoryId,
       userId,
       category.name,
       category.monthlyLimit,
+      category.parentId ?? null,
+      category.parentId !== undefined,
     ]);
   } catch (err) {
     if (pgCode(err) === "23505") throw new UserError("Já existe uma categoria com esse nome.");

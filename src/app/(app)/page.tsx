@@ -5,6 +5,10 @@ import { requireUserId } from "@/lib/auth";
 import { formatDate, formatMonth } from "@/lib/dates";
 import { monthParam, type SearchParams } from "@/lib/search-params";
 import { getDashboard } from "@/data/dashboard";
+import { getOverview } from "@/data/overview";
+import { balanceForecast } from "@/data/forecast";
+import { formatMoney } from "@/lib/money";
+import { LineChart } from "@/components/line-chart";
 import { accountTypes } from "@/domain/accounts";
 import { signedAmount } from "@/domain/transactions";
 import type { Insight } from "@/domain/insights";
@@ -24,7 +28,8 @@ const insightIcons: Record<Insight["tone"], typeof Info> = {
 export default async function PainelPage({ searchParams }: { searchParams: SearchParams }) {
   const userId = await requireUserId();
   const month = monthParam(await searchParams);
-  const d = await getDashboard(getDb(), userId, month);
+  const db = getDb();
+  const [d, overview, forecast] = await Promise.all([getDashboard(db, userId, month), getOverview(db, userId), balanceForecast(db, userId)]);
   const result = d.month.income - d.month.expense;
   const isCurrentMonth = month === d.today.slice(0, 7);
   const categoryRows = [
@@ -62,6 +67,53 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
         </div>
       </div>
 
+      <section className="card overview" aria-labelledby="panorama-title">
+        <h2 id="panorama-title">Panorama hoje</h2>
+        <div className="grid">
+          <div className="stat">
+            <div className="label">Dinheiro nas contas</div>
+            <div className="value"><Money cents={overview.available} testId="saldo-disponivel" /></div>
+            <div className="hint">Patrimônio líquido: <Money cents={overview.netWorth} testId="patrimonio" /> (contas − cartões − dívidas)</div>
+          </div>
+          {overview.cards.count > 0 && (
+            <div className="stat">
+              <div className="label">Cartões: fatura a pagar</div>
+              <div className="value"><Money cents={overview.cards.toPay} testId="faturas-a-pagar" /></div>
+              <div className="hint">
+                Fatura aberta: <Money cents={overview.cards.openInvoices} />
+                {overview.cards.limit !== null && <> · limite livre <Money cents={overview.cards.limitAvailable ?? 0} /> de <Money cents={overview.cards.limit} /></>}
+              </div>
+            </div>
+          )}
+          {(overview.debts.count > 0 || overview.debts.lentReceivable > 0) && (
+            <div className="stat">
+              <div className="label">Dívidas em aberto</div>
+              <div className="value"><Money cents={overview.debts.owed} testId="dividas-abertas" /></div>
+              {overview.debts.lentReceivable > 0 && <div className="hint">A receber de empréstimos: <Money cents={overview.debts.lentReceivable} /></div>}
+            </div>
+          )}
+          <div className="stat">
+            <div className="label">Renda comprometida</div>
+            <div className="value" data-testid="comprometimento">{overview.commitment.percent === null ? "—" : `${overview.commitment.percent}%`}</div>
+            <div className="hint">
+              {formatMoney(overview.commitment.monthly)} por mês em parcelas e contas fixas
+              {overview.commitment.averageIncome > 0 ? <> · renda média {formatMoney(overview.commitment.averageIncome)}</> : " · sem renda registrada nos últimos meses"}
+            </div>
+          </div>
+        </div>
+        <h3 className="label">Previsão de dinheiro nas contas</h3>
+        <div className="horizons">
+          {forecast.points.map((p) => (
+            <Link key={p.days} href="/planejamento" className={`horizon ${p.balance < 0 ? "negative" : ""}`}>
+              <div className="label">{p.days} dias</div>
+              <div className={`value ${p.balance < 0 ? "negative" : ""}`}>{formatMoney(p.balance)}</div>
+            </Link>
+          ))}
+        </div>
+        {forecast.firstNegative && <p className="hint negative-text">Atenção: pelo previsto, o saldo fica negativo em {formatDate(forecast.firstNegative)}.</p>}
+        <Link href="/planejamento" className="card-link">Ver previsão e orçamento</Link>
+      </section>
+
       <section className="card insights" aria-labelledby="insights-title">
         <h2 id="insights-title"><Sparkles size={18} aria-hidden /> Análise de {formatMonth(month).split(" de ")[0]}</h2>
         <ul>
@@ -86,6 +138,17 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
       </div>
 
       <FlowChart flow={d.flow} />
+
+      <section className="card" aria-labelledby="patrimonio-title">
+        <h2 id="patrimonio-title" className="card-icon-title"><TrendingUp size={18} aria-hidden /> Evolução do patrimônio · 12 meses</h2>
+        <LineChart
+          points={overview.netWorthHistory.map((p) => ({ key: p.month, label: formatMonth(p.month).slice(0, 3) + "/" + p.month.slice(2, 4), value: p.net, detail: `Contas ${formatMoney(p.assets)} · cartões e dívidas ${formatMoney(p.debts)}` }))}
+          ariaLabel="Patrimônio líquido no fim de cada mês"
+          tickEvery={3}
+          tableTitle="Mês"
+        />
+        <p className="hint">Saldo no fim de cada mês (o atual, até hoje), somando contas e descontando cartões e dívidas.</p>
+      </section>
 
       <div className="grid grid-2">
         <section className="card">

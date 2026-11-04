@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import type { AccountOption } from "@/domain/accounts";
-import type { CategoryOption } from "@/domain/categories";
+import { sortedCategoryOptions, type CategoryOption } from "@/domain/categories";
 import { cardKinds, chargeKinds, type Invoice } from "@/domain/cards";
 import type { CardDetail } from "@/data/cards";
 import { formatDate, formatMonth, shiftMonth } from "@/lib/dates";
@@ -223,7 +223,7 @@ export function CardDetailView({
             Categoria da compra estornada
             <select name="categoryId" defaultValue="">
               <option value="">Sem categoria</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {sortedCategoryOptions(categories).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
           </label>
           <p className="hint">O estorno abate a fatura e o gasto da categoria; não é contado como receita.</p>

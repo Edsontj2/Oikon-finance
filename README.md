@@ -71,6 +71,16 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## Planejamento, metas e panorama
+
+- **Todo mês (sem fim):** o lançamento recorrente gera um lançamento por mês quando o mês chega (pendente), até a pessoa excluir com "Parar de repetir". Os meses futuros não existem no banco, por isso o pendente mostra só o mês atual (`recurring_rules`, migração 0010).
+- **Subcategorias:** um nível, do mesmo tipo da principal. O limite da principal vale para ela e as filhas juntas; painel e orçamento somam as filhas na principal (migração 0011).
+- **Planejamento** (`/planejamento`):
+  - Previsão do dinheiro nas contas em 7, 15, 30, 60 e 90 dias: pendentes e agendados, meses futuros dos recorrentes e faturas no vencimento (menos pagamentos já agendados). Compras no cartão só entram pela fatura. Avisa o dia em que o saldo ficaria negativo.
+  - Orçamento do mês: planejado (limites) × realizado, alerta a partir de 80%, gasto acima da média dos 3 meses anteriores e recorrentes previstos nos meses futuros.
+- **Metas** (`/metas`): objetivos com valor e data (quanto guardar por mês e se está no ritmo) e reserva de emergência sugerida pelo gasto médio × meses. O progresso vem do saldo de uma conta ligada ou de um valor anotado à mão (que não mexe em saldo nenhum).
+- **Painel:** panorama com dinheiro nas contas, patrimônio líquido, faturas a pagar e limite livre, dívidas, renda comprometida (parcelas e contas fixas ÷ renda média) e a evolução do patrimônio em 12 meses.
+
 ## Agenda, dívidas e empréstimos
 
 - **Agenda** (contas a pagar e a receber): junta tudo que está pendente (lançamentos não pagos,

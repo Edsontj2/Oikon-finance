@@ -10,11 +10,14 @@ import { saveCategory } from "../actions";
 
 export function CategoryForm({
   category,
+  categories = [],
   defaultKind = "expense",
   onDone,
   onCancel,
 }: {
   category?: Category;
+  /** Todas as categorias, para escolher a principal (subcategoria). */
+  categories?: Category[];
   defaultKind?: CategoryKind;
   onDone: () => void;
   onCancel: () => void;
@@ -54,6 +57,21 @@ export function CategoryForm({
         Nome
         <input name="name" required maxLength={LIMITS.categoryName} defaultValue={category?.name} autoComplete="off" />
       </label>
+      {(() => {
+        const hasChildren = category ? categories.some((c) => c.parentId === category.id) : false;
+        const parents = categories.filter((c) => c.kind === kind && !c.parentId && c.id !== category?.id);
+        if (hasChildren) return <p className="hint">Esta categoria tem subcategorias.</p>;
+        return (
+          <label>
+            Dentro de (opcional)
+            <select name="parentId" key={kind} defaultValue={category?.parentId ?? ""}>
+              <option value="">Nenhuma: é uma categoria principal</option>
+              {parents.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <span className="hint">Ex.: &quot;Restaurante&quot; dentro de &quot;Alimentação&quot;. O limite da principal vale para ela e as subcategorias juntas.</span>
+          </label>
+        );
+      })()}
       {kind === "expense" && (
         <MoneyInput
           name="monthlyLimit"

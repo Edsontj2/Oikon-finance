@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { CreditCard, HandCoins, Settings, Tags } from "lucide-react";
+import { CalendarRange, CreditCard, HandCoins, Settings, Tags, Target } from "lucide-react";
 
 /** No celular, a barra de baixo tem 5 abas; o resto fica aqui. */
 export default function MaisPage() {
   const links = [
     { href: "/cartoes", label: "Cartões", icon: CreditCard },
     { href: "/dividas", label: "Dívidas e empréstimos", icon: HandCoins },
+    { href: "/planejamento", label: "Planejamento: previsão e orçamento", icon: CalendarRange },
+    { href: "/metas", label: "Metas e reserva de emergência", icon: Target },
     { href: "/categorias", label: "Categorias", icon: Tags },
     { href: "/configuracoes", label: "Configurações e WhatsApp", icon: Settings },
   ];

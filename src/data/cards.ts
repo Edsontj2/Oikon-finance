@@ -144,15 +144,17 @@ function toCard(r: CardRow, entries: CardEntry[], todayStr: string): CardDetail 
   };
 }
 
-/** Todos os cartões, com a fatura atual, a que falta pagar e o limite. */
-export async function listCards(db: Db, userId: string, now = new Date()): Promise<Card[]> {
+/** Todos os cartões com todas as faturas (para previsões). */
+export async function listCardDetails(db: Db, userId: string, now = new Date()): Promise<CardDetail[]> {
   const todayStr = today(now);
   const rows = await cardRows(db, userId, todayStr);
   const entries = await cardEntries(db, userId, rows.map((r) => r.id as string), todayStr);
-  return rows.map((r) => {
-    const { invoices: _all, ...card } = toCard(r, entries.get(r.id as string) ?? [], todayStr);
-    return card;
-  });
+  return rows.map((r) => toCard(r, entries.get(r.id as string) ?? [], todayStr));
+}
+
+/** Todos os cartões, com a fatura atual, a que falta pagar e o limite. */
+export async function listCards(db: Db, userId: string, now = new Date()): Promise<Card[]> {
+  return (await listCardDetails(db, userId, now)).map(({ invoices: _all, ...card }) => card);
 }
 
 /** Um cartão com todas as faturas (da primeira até a última parcela lançada). */

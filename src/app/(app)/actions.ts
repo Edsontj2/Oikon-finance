@@ -107,7 +107,11 @@ export async function reconcile(form: FormData): Promise<ActionResult> {
 export async function saveCategory(form: FormData): Promise<ActionResult> {
   const userId = await requireUserId();
   const id = field(form, "id");
-  const fields = () => ({ name: field(form, "name"), monthlyLimit: moneyField(form, "monthlyLimit", "Limite", true) });
+  const fields = () => ({
+    name: field(form, "name"),
+    monthlyLimit: moneyField(form, "monthlyLimit", "Limite", true),
+    parentId: form.has("parentId") ? field(form, "parentId") || null : undefined,
+  });
   if (id) return runAction("Categoria atualizada.", () => updateCategory(getDb(), userId, id, fields()));
   return runAction("Categoria criada.", () =>
     createCategory(getDb(), userId, {
