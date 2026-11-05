@@ -133,6 +133,9 @@ describe("todo mês, sem fim", () => {
     rows = await s.all();
     expect(rows.map((r) => r.date)).toEqual(["2026-11-04", "2026-11-05", "2027-01-05"]); // dezembro não volta
 
+    const agenda = await listBills(db, s.userId, at("2027-01-10"));
+    const previstos = agenda.groups.flatMap((g) => g.items).filter((b) => b.projected);
+    expect(previstos.map((b) => b.date)).toEqual(["2027-02-05", "2027-03-05", "2027-04-05"]);
     await stopRecurring(db, s.userId, ruleId);
     expect(await projectedRecurring(db, s.userId, "2027-02")).toEqual([]);
   });

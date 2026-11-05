@@ -6,10 +6,11 @@ import { formatDate } from "@/lib/dates";
 import { Money } from "@/components/money";
 import { FormError } from "@/components/form-error";
 import { useServerAction } from "@/components/use-server-action";
-import { setTransactionPaid } from "../actions";
+import { payProjected, setTransactionPaid } from "../actions";
 
 export function BillsView({ groups, next30 }: { groups: BillGroup[]; next30: { pay: number; receive: number } }) {
   const pay = useServerAction(setTransactionPaid);
+  const payAhead = useServerAction(payProjected);
   return (
     <>
       <div className="page-head">
@@ -20,7 +21,7 @@ export function BillsView({ groups, next30 }: { groups: BillGroup[]; next30: { p
         <div><span className="label">A pagar em 30 dias</span><Money cents={next30.pay} testId="agenda-pagar" /></div>
         <div><span className="label">A receber em 30 dias</span><Money cents={next30.receive} testId="agenda-receber" /></div>
       </div>
-      <FormError message={pay.error} />
+      <FormError message={pay.error ?? payAhead.error} />
       {groups.length === 0 ? (
         <div className="card empty"><p>Nada pendente nos próximos 90 dias. 👍</p></div>
       ) : (
@@ -42,6 +43,7 @@ export function BillsView({ groups, next30 }: { groups: BillGroup[]; next30: { p
                       <span className="row-title">
                         {b.href ? <Link href={b.href}>{b.description}</Link> : b.description}{" "}
                         {g.key === "overdue" && <span className="tag tag-late">atrasada</span>}
+                        {b.projected && <span className="tag tag-pending" title="Repete todo mês: é lançado quando o mês chegar">previsto</span>}
                       </span>
                       <span className="row-sub">
                         {formatDate(b.date)} · {b.accountName}
@@ -51,7 +53,11 @@ export function BillsView({ groups, next30 }: { groups: BillGroup[]; next30: { p
                     </span>
                     <span className="row-value">
                       <Money cents={b.kind === "receive" ? b.amount : -b.amount} signed={b.kind === "receive"} />
-                      {b.transactionId ? (
+                      {b.projected ? (
+                        <button type="button" className="btn btn-sm btn-secondary" disabled={payAhead.pending} onClick={() => payAhead.run(b.projected!.ruleId, b.projected!.month)}>
+                          Pagar agora
+                        </button>
+                      ) : b.transactionId ? (
                         <button type="button" className="btn btn-sm btn-secondary" disabled={pay.pending} onClick={() => pay.run(b.transactionId!, true)}>
                           {b.kind === "receive" ? "Recebido" : "Pago"}
                         </button>

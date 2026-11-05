@@ -4,7 +4,8 @@
  * só junta o que já existe nos lançamentos e nos cartões.
  */
 import { num, type Db } from "@/lib/db";
-import { today } from "@/lib/dates";
+import { shiftMonth, today } from "@/lib/dates";
+import { projectedRecurring } from "./recurring";
 import { listCards } from "./cards";
 
 export type Bill = {
@@ -20,6 +21,8 @@ export type Bill = {
   /** Parcela de empréstimo, fatura etc.: link para a tela certa. */
   href: string | null;
   transactionId: string | null;
+  /** Mês futuro de um "Todo mês" (ainda não lançado). */
+  projected?: { ruleId: string; month: string };
 };
 
 export type BillGroup = { key: "overdue" | "today" | "week" | "month" | "later"; label: string; items: Bill[]; pay: number; receive: number };
@@ -82,6 +85,25 @@ export async function listBills(db: Db, userId: string, now = new Date()): Promi
       href: `/cartoes/${card.id}?fatura=${inv.month}`,
       transactionId: null,
     });
+  }
+  // Meses futuros dos "Todo mês" (ainda não lançados). No cartão já entram pela fatura.
+  for (let month = shiftMonth(todayStr.slice(0, 7), 1); month <= until.slice(0, 7); month = shiftMonth(month, 1)) {
+    for (const t of await projectedRecurring(db, userId, month)) {
+      if (t.date > until || t.paid) continue;
+      bills.push({
+        id: t.id,
+        kind: t.type === "expense" ? "pay" : t.type === "income" ? "receive" : "transfer",
+        description: t.description,
+        amount: t.amount,
+        date: t.date,
+        accountName: t.accountName,
+        toAccountName: t.toAccountName,
+        categoryName: t.categoryName,
+        href: null,
+        transactionId: null,
+        projected: t.projected,
+      });
+    }
   }
   bills.sort((a, b) => a.date.localeCompare(b.date));
 
