@@ -71,6 +71,15 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## App Android (notificações do banco)
+
+- Código em `android/` (Kotlin, só APIs do Android, sem bibliotecas extras). O GitHub Actions (`.github/workflows/android.yml`) gera o APK a cada mudança em `android/` e publica em **Releases** (`oikon.apk`, link fixo `releases/latest/download/oikon.apk`).
+- O app lê as notificações só dos apps de banco que a pessoa marcar (NotificationListenerService, com permissão explícita), descarta no próprio celular o que não tem valor em R$, guarda numa fila local (envia quando houver internet, com novas tentativas) e manda para `POST /api/app/notificacoes` com o token do celular.
+- Vínculo: o site gera um código de 8 dígitos (10 min, uma vez) em **Notificações do banco**; o app troca por um token (`/api/app/vincular`) guardado cifrado no Android Keystore. No banco fica só o hash. Desvincular no site corta o acesso na hora.
+- O leitor (`src/domain/bank-notification.ts`, regras fixas) identifica compra, Pix, transferência, pagamento, estorno, recusa e propaganda; sugere a conta pelo final do cartão ou pelo banco e a categoria pelo histórico. **Nada é lançado sozinho**: cada notificação espera confirmação no site (e avisa se parece já lançada). Reenviar não duplica (id gerado no celular).
+- Assinatura: sem segredos, usa `android/app/dev.keystore` (atualizações instalam por cima). Para a Play Store, configure os segredos `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` e `ANDROID_KEY_PASSWORD`.
+- iPhone: a Apple não permite ler notificações de outros apps; use a importação de extrato.
+
 ## Relatório e exportação
 
 - **Mais → Relatório** (`/relatorio?mes=`): resumo do mês, gastos por categoria (com limites), contas, cartões, dívidas e lançamentos. O botão "Salvar em PDF" abre a impressão do navegador; o estilo de impressão tira o menu e as cores (fundo branco, 1 página quando cabe).

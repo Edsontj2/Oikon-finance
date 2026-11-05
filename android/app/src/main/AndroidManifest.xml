@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Android 11+: só enxerga os apps de banco listados (para mostrar quais estão instalados). -->
+    <queries>
+        <package android:name="com.nu.production" />
+        <package android:name="br.com.intermedium" />
+        <package android:name="com.c6bank.app" />
+        <package android:name="com.itau" />
+        <package android:name="com.itau.iti" />
+        <package android:name="br.com.bb.android" />
+        <package android:name="com.bradesco" />
+        <package android:name="br.com.bradesco.next" />
+        <package android:name="com.santander.app" />
+        <package android:name="br.com.gabba.Caixa" />
+        <package android:name="br.gov.caixa.tem" />
+        <package android:name="com.picpay" />
+        <package android:name="com.mercadopago.wallet" />
+        <package android:name="br.com.original.bank" />
+        <package android:name="com.btg.pactual.banking" />
+        <package android:name="br.com.uol.ps.myaccount" />
+        <package android:name="com.neon" />
+        <package android:name="br.com.sicoob.app" />
+        <package android:name="br.com.sicredi.app" />
+        <package android:name="com.google.android.apps.messaging" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".CaptureService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".UploadJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+    </application>
+</manifest>

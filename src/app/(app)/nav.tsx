@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeftRight, CalendarClock, CalendarRange, CreditCard, Ellipsis, FileText, FileUp, HandCoins, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Tags, Target, Wallet } from "lucide-react";
+import { ArrowLeftRight, BellRing, CalendarClock, CalendarRange, CreditCard, Ellipsis, FileText, FileUp, HandCoins, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Tags, Target, Wallet } from "lucide-react";
 
 const items = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
@@ -14,6 +14,7 @@ const items = [
   { href: "/dividas", label: "Dívidas", icon: HandCoins },
   { href: "/planejamento", label: "Planejamento", icon: CalendarRange },
   { href: "/metas", label: "Metas", icon: Target },
+  { href: "/notificacoes", label: "Notificações do banco", icon: BellRing },
   { href: "/importar", label: "Importar extrato", icon: FileUp },
   { href: "/relatorio", label: "Relatório", icon: FileText },
   { href: "/categorias", label: "Categorias", icon: Tags },
@@ -21,7 +22,7 @@ const items = [
 
 /** Celular: 4 abas principais + "Mais" (o resto). */
 const bottomItems = [...items.filter((i) => ["/", "/lancamentos", "/agenda", "/contas"].includes(i.href)), { href: "/mais", label: "Mais", icon: Ellipsis }];
-const inMore = ["/cartoes", "/dividas", "/planejamento", "/metas", "/importar", "/relatorio", "/categorias", "/configuracoes", "/mais"];
+const inMore = ["/cartoes", "/dividas", "/planejamento", "/metas", "/notificacoes", "/importar", "/relatorio", "/categorias", "/configuracoes", "/mais"];
 
 const PIN_KEY = "oikon:menu-fixo";
 
