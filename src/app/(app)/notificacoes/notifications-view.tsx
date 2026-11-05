@@ -40,9 +40,10 @@ export function NotificationsView({ pending, done, devices, paused, accounts, ca
         ) : (
           <>
             <p className="muted">
-              Instale o app OIKON no Android: é o OIKON completo e, além disso, lê as notificações dos apps de banco que você escolher
-              (compra aprovada, Pix enviado ou recebido). Nada é lançado sozinho: cada uma aparece aqui para você confirmar. No iPhone a
-              Apple não permite ler notificações de outros apps; use <a href="/importar">Importar extrato</a>.
+              Instale o app OIKON no Android: é o OIKON completo e, além disso, lê as notificações de qualquer banco (compra aprovada,
+              Pix enviado ou recebido). Quando um app avisa um valor em R$, o OIKON pergunta se você quer integrar. Nada é lançado
+              sozinho: cada uma aparece aqui para você confirmar. No iPhone a Apple não permite ler notificações de outros apps; use{" "}
+              <a href="/importar">Importar extrato</a>.
             </p>
             <ol className="steps">
               <li><a href="https://github.com/Edsontj2/Oikon-finance/releases/latest/download/oikon.apk">Baixe o app (APK)</a> no celular Android e instale (permita &quot;instalar apps desconhecidos&quot; para o navegador).</li>

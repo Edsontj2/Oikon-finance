@@ -29,4 +29,12 @@ describe("leitor de notificações de banco", () => {
     expect(p({ packageName: "com.nu.production", text: "Estorno de R$ 49,90 da compra em LOJA X" })).toMatchObject({ kind: "refund", amount: 4990 });
     expect(p({ packageName: "com.itau", text: "Pagamento de fatura de R$ 1.234,56 realizado" })).toMatchObject({ kind: "payment", amount: 123456 });
   });
+
+  it("app de qualquer banco: lê do mesmo jeito e usa o nome do app como banco", () => {
+    expect(p({ packageName: "br.com.bancoxyz.mobile", appName: "Banco XYZ", text: "Compra aprovada de R$ 25,00 em PADARIA" })).toMatchObject({
+      kind: "purchase", amount: 2500, institution: "Banco XYZ", counterpart: "PADARIA",
+    });
+    expect(p({ packageName: "br.com.bancoxyz.mobile", text: "Pix recebido de R$ 10,00 de Ana" }).institution).toBeNull();
+    expect(p({ packageName: "com.nu.production", appName: "Nu", text: "Pix recebido de R$ 10,00 de Ana" }).institution).toBe("Nubank");
+  });
 });

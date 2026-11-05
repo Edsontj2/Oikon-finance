@@ -25,6 +25,19 @@ class Prefs(context: Context) {
         get() = sp.getStringSet("apps", emptySet()) ?: emptySet()
         set(v) = sp.edit().putStringSet("apps", HashSet(v)).apply()
 
+    /** Apps que a pessoa decidiu não integrar. */
+    var deniedApps: Set<String>
+        get() = sp.getStringSet("deniedApps", emptySet()) ?: emptySet()
+        set(v) = sp.edit().putStringSet("deniedApps", HashSet(v)).apply()
+
+    /** Apps não decididos que já mandaram notificação com valor: pacote -> quantas. */
+    var detectedApps: Map<String, Int>
+        get() {
+            val json = try { org.json.JSONObject(sp.getString("detectedApps", "{}") ?: "{}") } catch (e: Exception) { org.json.JSONObject() }
+            return json.keys().asSequence().associateWith { json.optInt(it) }
+        }
+        set(v) = sp.edit().putString("detectedApps", org.json.JSONObject(v as Map<*, *>).toString()).apply()
+
     var deviceName: String
         get() = sp.getString("deviceName", null) ?: android.os.Build.MODEL ?: "Celular"
         set(v) = sp.edit().putString("deviceName", v).apply()

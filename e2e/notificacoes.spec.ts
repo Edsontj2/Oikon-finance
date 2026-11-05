@@ -46,7 +46,11 @@ test("dentro do app: ativar neste celular sem digitar código, permissões e PDF
   // Simula a ponte do app Android (window.OikonApp) e guarda as chamadas.
   await page.addInitScript(() => {
     const w = window as unknown as Record<string, unknown>;
-    const state = { linked: false, listener: false, apps: [{ pkg: "com.nu.production", label: "Nubank", allowed: true }, { pkg: "com.itau", label: "Itaú", allowed: false }] };
+    const entry = (pkg: string, label: string, st: string, detected = 0) => ({ pkg, label, state: st, allowed: st === "on", detected, known: false });
+    const state = {
+      linked: false, listener: false,
+      apps: [entry("br.com.bancoxyz", "Banco XYZ", "ask", 2), entry("com.nu.production", "Nubank", "on"), entry("com.itau", "Itaú", "off")],
+    };
     const calls: unknown[][] = [];
     w.__calls = calls;
     w.__state = state;
@@ -54,7 +58,12 @@ test("dentro do app: ativar neste celular sem digitar código, permissões e PDF
       info: () => JSON.stringify({ ...state, deviceName: "Pixel", paused: false, pending: 0, lastSync: 0, lastError: null }),
       link: (code: string) => calls.push(["link", code]),
       unlink: () => calls.push(["unlink"]),
-      setApp: (pkg: string, on: boolean) => { calls.push(["setApp", pkg, on]); state.apps = state.apps.map((a) => (a.pkg === pkg ? { ...a, allowed: on } : a)); },
+      setApp: (pkg: string, on: boolean) => {
+        calls.push(["setApp", pkg, on]);
+        const found = state.apps.some((a) => a.pkg === pkg);
+        state.apps = found ? state.apps.map((a) => (a.pkg === pkg ? { ...a, state: on ? "on" : "off", allowed: on } : a)) : [...state.apps, entry(pkg, "Carteira Z", on ? "on" : "off")];
+      },
+      allApps: () => JSON.stringify([{ pkg: "com.nu.production", label: "Nubank" }, { pkg: "com.carteiraz", label: "Carteira Z" }, { pkg: "com.jogo", label: "Jogo" }]),
       setPaused: () => {},
       openNotificationAccess: () => calls.push(["access"]),
       openSetup: () => calls.push(["setup"]),
@@ -81,11 +90,27 @@ test("dentro do app: ativar neste celular sem digitar código, permissões e PDF
   await expect(page.getByRole("list", { name: "Celulares vinculados" })).toContainText("Pixel");
 
   await page.getByRole("button", { name: "Permitir acesso às notificações" }).click();
+
+  // Qualquer banco: o app novo que avisou valores pede decisão; integrar vira um marcado.
+  await expect(page.getByTestId("app-novo")).toContainText("Banco XYZ avisou 2 valores em R$");
+  await page.getByTestId("app-novo").getByRole("button", { name: "Integrar", exact: true }).click();
+  await expect(page.getByTestId("app-novo")).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "Banco XYZ" })).toBeChecked();
   await page.getByRole("checkbox", { name: "Itaú" }).check();
   await expect(page.getByRole("checkbox", { name: "Itaú" })).toBeChecked();
+
+  // Integrar um app que ainda não apareceu, buscando pelo nome.
+  await page.getByText("Integrar outro app").click();
+  await page.getByRole("searchbox", { name: "Buscar app" }).fill("cart");
+  await expect(page.getByText("Jogo")).toHaveCount(0);
+  await page.locator("details li", { hasText: "Carteira Z" }).getByRole("button", { name: "Integrar", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Carteira Z" })).toBeChecked();
+
   const calls = await page.evaluate(() => (window as unknown as { __calls: unknown[][] }).__calls);
   expect(calls).toContainEqual(["access"]);
+  expect(calls).toContainEqual(["setApp", "br.com.bancoxyz", true]);
   expect(calls).toContainEqual(["setApp", "com.itau", true]);
+  expect(calls).toContainEqual(["setApp", "com.carteiraz", true]);
 
   // Voltou das configurações do Android com a permissão dada.
   await page.evaluate(() => {

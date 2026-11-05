@@ -678,6 +678,7 @@ a.horizon:hover { background: rgba(255, 255, 255, 0.06); }
 .steps-done li.done { color: var(--foreground); }
 .steps-done li.done::marker { content: "✓  "; color: var(--success); }
 .steps-done .stack-actions { margin-top: 0.5rem; }
+.app-ask { display: grid; gap: 0.5rem; padding: 0.75rem; border-radius: 12px; border: 1px solid color-mix(in oklab, var(--primary) 40%, transparent); background: color-mix(in oklab, var(--primary) 8%, transparent); }
 .bank-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 0.4rem 1rem; }
 .device-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
 .notification-card .mini-list-line { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }

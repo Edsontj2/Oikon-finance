@@ -92,7 +92,7 @@ export async function ingestNotifications(db: Db, device: DeviceAuth, items: Inc
     [device.userId],
   );
   const records = valid.map((n) => {
-    const parsed = parseBankNotification({ packageName: n.package, title: n.title, text: n.text });
+    const parsed = parseBankNotification({ packageName: n.package, appName: n.appName, title: n.title, text: n.text });
     const direction = notificationDirection(parsed.kind);
     const status = direction && parsed.confidence >= 0.5 ? "pending" : "discarded";
     return { n, parsed, status };

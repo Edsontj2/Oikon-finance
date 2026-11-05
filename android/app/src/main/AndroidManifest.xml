@@ -8,8 +8,12 @@
     <!-- Android 8 e 9: salvar o CSV exportado em Downloads. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
-    <!-- Android 11+: só enxerga os apps de banco listados (para mostrar quais estão instalados). -->
+    <!-- Android 11+: enxerga os apps abríveis (para a pessoa escolher qualquer um) e os bancos conhecidos. -->
     <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <package android:name="com.nu.production" />
         <package android:name="br.com.intermedium" />
         <package android:name="com.c6bank.app" />
@@ -65,6 +69,10 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <receiver
+            android:name=".AppDecision"
+            android:exported="false" />
 
         <service
             android:name=".UploadJob"

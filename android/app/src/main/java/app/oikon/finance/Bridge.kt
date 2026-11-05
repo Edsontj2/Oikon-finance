@@ -2,7 +2,6 @@ package app.oikon.finance
 
 import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.provider.Settings
 import android.webkit.JavascriptInterface
 import org.json.JSONArray
@@ -23,9 +22,11 @@ class Bridge(private val activity: MainActivity) {
     fun info(): String {
         if (!allowed()) return "{}"
         val apps = JSONArray()
-        for ((pkg, label) in Config.BANK_APPS) {
-            if (!isInstalled(pkg)) continue
-            apps.put(JSONObject().put("pkg", pkg).put("label", label).put("allowed", pkg in prefs.allowedApps))
+        for (a in Apps.list(activity)) {
+            apps.put(
+                JSONObject().put("pkg", a.pkg).put("label", a.label).put("state", a.state)
+                    .put("allowed", a.state == Apps.ON).put("detected", a.detected).put("known", a.known),
+            )
         }
         return JSONObject()
             .put("linked", prefs.linked)
@@ -55,7 +56,7 @@ class Bridge(private val activity: MainActivity) {
                 prefs.lastError = null
                 detail.put("linked", true)
                 // Começa com os apps de banco instalados marcados (dá para desmarcar). SMS fica de fora até a pessoa marcar.
-                if (prefs.allowedApps.isEmpty()) prefs.allowedApps = Config.BANK_APPS.keys.filter { it != Config.SMS_APP && isInstalled(it) }.toSet()
+                if (prefs.allowedApps.isEmpty()) prefs.allowedApps = Config.BANK_APPS.keys.filter { it != Config.SMS_APP && Apps.isInstalled(activity, it) }.toSet()
             } else {
                 detail.put("linked", false).put("error", result?.message ?: "Sem conexão com o OIKON. Tente de novo.")
             }
@@ -70,10 +71,20 @@ class Bridge(private val activity: MainActivity) {
         activity.notifyPage("{}")
     }
 
+    /** Integrar (true) ou não (false) um app. Vale para qualquer app, não só bancos conhecidos. */
     @JavascriptInterface
     fun setApp(pkg: String, enabled: Boolean) {
-        if (!allowed() || pkg !in Config.BANK_APPS) return
-        prefs.allowedApps = if (enabled) prefs.allowedApps + pkg else prefs.allowedApps - pkg
+        if (!allowed() || !Apps.validPackage(pkg)) return
+        Apps.decide(activity, pkg, enabled)
+    }
+
+    /** Todos os apps do celular (nome e pacote), para integrar um que ainda não apareceu. */
+    @JavascriptInterface
+    fun allApps(): String {
+        if (!allowed()) return "[]"
+        val out = JSONArray()
+        for ((pkg, label) in Apps.launchable(activity)) out.put(JSONObject().put("pkg", pkg).put("label", label))
+        return out.toString()
     }
 
     @JavascriptInterface
@@ -117,12 +128,5 @@ class Bridge(private val activity: MainActivity) {
         val flat = Settings.Secure.getString(activity.contentResolver, "enabled_notification_listeners") ?: return false
         val me = ComponentName(activity, CaptureService::class.java).flattenToString()
         return flat.split(":").any { it == me }
-    }
-
-    private fun isInstalled(pkg: String): Boolean = try {
-        activity.packageManager.getApplicationInfo(pkg, 0)
-        true
-    } catch (e: PackageManager.NameNotFoundException) {
-        false
     }
 }

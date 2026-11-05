@@ -7,14 +7,16 @@ import java.security.MessageDigest
 
 /**
  * Lê as notificações (o Android só permite depois que a pessoa autoriza nas configurações).
- * Filtra aqui mesmo, no celular: só dos apps de banco marcados e só as que têm valor em reais.
- * O resto nunca sai do aparelho.
+ * Filtra aqui mesmo, no celular: só as que têm valor em reais, e só dos apps que a pessoa integrou.
+ * App novo que avisa valor: o OIKON pergunta se é para integrar e, até a resposta, guarda só no
+ * celular. App recusado: nada dele é guardado. O resto nunca sai do aparelho.
  */
 class CaptureService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         try {
             val prefs = Prefs(this)
-            if (prefs.paused || !prefs.linked || sbn.packageName !in prefs.allowedApps) return
+            val pkg = sbn.packageName
+            if (prefs.paused || !prefs.linked || pkg == packageName || pkg in prefs.deniedApps) return
             val n = sbn.notification ?: return
             if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0 || n.flags and Notification.FLAG_ONGOING_EVENT != 0) return
             val extras = n.extras ?: return
@@ -23,18 +25,22 @@ class CaptureService : NotificationListenerService() {
             if (text.isNullOrEmpty()) return
             val full = "${title ?: ""} $text"
             if (!MONEY.containsMatchIn(full)) return
-            val appName = Config.BANK_APPS[sbn.packageName] ?: sbn.packageName
+            val integrated = pkg in prefs.allowedApps
+            val appName = Apps.label(this, pkg)
             val captured = Captured(
-                id = idFor(sbn.packageName, sbn.key, text),
-                pkg = sbn.packageName,
+                id = idFor(pkg, sbn.key, text),
+                pkg = pkg,
                 appName = appName,
                 title = title?.take(200),
                 text = text.take(1000),
                 postedAt = sbn.postTime,
-                status = "pendente",
+                status = if (integrated) "pendente" else HELD,
                 error = null,
             )
-            if (Queue(this).add(captured)) UploadJob.schedule(this)
+            val added = Queue(this).add(captured)
+            if (!added) return
+            if (integrated) UploadJob.schedule(this)
+            else if (Apps.noteDetected(this, pkg)) Alerts.askApp(this, pkg, appName)
         } catch (e: Exception) {
             Prefs(this).lastError = "Erro ao ler notificação: ${e.message}"
         }

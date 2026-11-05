@@ -17,6 +17,9 @@ data class Captured(
     val error: String?,
 )
 
+/** Status de quem veio de um app ainda não decidido: fica só no celular até a pessoa escolher. */
+const val HELD = "retida"
+
 class Queue(context: Context) : SQLiteOpenHelper(context.applicationContext, "fila.db", null, 1) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -39,6 +42,7 @@ class Queue(context: Context) : SQLiteOpenHelper(context.applicationContext, "fi
             put("title", item.title)
             put("text", item.text)
             put("posted_at", item.postedAt)
+            put("status", item.status)
             put("created_at", System.currentTimeMillis())
         }
         return writableDatabase.insertWithOnConflict("fila", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1L
@@ -50,6 +54,16 @@ class Queue(context: Context) : SQLiteOpenHelper(context.applicationContext, "fi
 
     fun countPending(): Int =
         readableDatabase.rawQuery("SELECT count(*) FROM fila WHERE status = 'pendente'", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+    /** Notificações de um app que ainda espera a decisão da pessoa: passam a ser enviadas. */
+    fun release(pkg: String) {
+        writableDatabase.execSQL("UPDATE fila SET status = 'pendente' WHERE pkg = ? AND status = '$HELD'", arrayOf(pkg))
+    }
+
+    /** A pessoa não quis integrar o app: o que estava guardado dele é apagado do celular. */
+    fun dropHeld(pkg: String) {
+        writableDatabase.execSQL("DELETE FROM fila WHERE pkg = ? AND status = '$HELD'", arrayOf(pkg))
+    }
 
     fun mark(ids: List<String>, status: String, error: String? = null) {
         if (ids.isEmpty()) return
@@ -65,12 +79,11 @@ class Queue(context: Context) : SQLiteOpenHelper(context.applicationContext, "fi
         }
     }
 
-    /** Limpa enviadas com mais de 30 dias (o histórico fica no site). */
+    /** Limpa enviadas com mais de 30 dias (o histórico fica no site) e as não decididas com mais de 7. */
     fun prune() {
-        writableDatabase.execSQL(
-            "DELETE FROM fila WHERE status <> 'pendente' AND posted_at < ?",
-            arrayOf(System.currentTimeMillis() - 30L * 24 * 3600 * 1000),
-        )
+        val now = System.currentTimeMillis()
+        writableDatabase.execSQL("DELETE FROM fila WHERE status NOT IN ('pendente', '$HELD') AND posted_at < ?", arrayOf(now - 30L * 24 * 3600 * 1000))
+        writableDatabase.execSQL("DELETE FROM fila WHERE status = '$HELD' AND posted_at < ?", arrayOf(now - 7L * 24 * 3600 * 1000))
     }
 
     private fun query(where: String?, order: String, limit: Int): List<Captured> {

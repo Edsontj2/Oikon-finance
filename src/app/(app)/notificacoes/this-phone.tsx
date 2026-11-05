@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { readAppInfo, type OikonApp, type OikonAppEvent, type OikonAppInfo } from "@/lib/oikon-app";
+import { readAllApps, readAppInfo, type OikonApp, type OikonAppEvent, type OikonAppInfo } from "@/lib/oikon-app";
 import { generateDeviceCode } from "./actions";
 
 /** Dentro do app Android: ativar e ajustar a leitura deste celular sem digitar código. */
@@ -70,19 +70,10 @@ export function ThisPhone({ app }: { app: OikonApp }) {
           )}
         </li>
         <li className={info.apps.some((a) => a.allowed) ? "done" : undefined}>
-          Bancos que o OIKON pode ler{info.apps.length === 0 ? ": nenhum app de banco conhecido instalado." : ":"}
+          Apps integrados: o OIKON percebe qualquer app que avise um valor em R$ e pergunta se você quer integrar. Você decide cada um.
         </li>
       </ol>
-      {info.apps.length > 0 && (
-        <div className="bank-apps">
-          {info.apps.map((a) => (
-            <label key={a.pkg} className="check">
-              <input type="checkbox" checked={a.allowed} onChange={(e) => { app.setApp(a.pkg, e.target.checked); refresh(); }} />
-              {a.label}
-            </label>
-          ))}
-        </div>
-      )}
+      <Apps app={app} info={info} onChange={refresh} />
       <p className="hint">
         {info.pending > 0 ? `${info.pending} esperando envio (sai quando houver internet).` : "Nada esperando envio."}
         {info.lastSync > 0 ? ` Último envio: ${new Date(info.lastSync).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.` : ""}
@@ -92,6 +83,61 @@ export function ThisPhone({ app }: { app: OikonApp }) {
         <button type="button" className="btn btn-secondary" onClick={() => app.syncNow()}>Enviar agora</button>
         <button type="button" className="btn btn-secondary" onClick={() => app.openSetup()}>Ver o que foi captado</button>
       </div>
+    </div>
+  );
+}
+
+function Apps({ app, info, onChange }: { app: OikonApp; info: OikonAppInfo; onChange: () => void }) {
+  const [all, setAll] = useState<{ pkg: string; label: string }[] | null>(null);
+  const [search, setSearch] = useState("");
+  const ask = info.apps.filter((a) => a.state === "ask");
+  const decided = info.apps.filter((a) => a.state !== "ask");
+  const set = (pkg: string, on: boolean) => { app.setApp(pkg, on); onChange(); };
+  const known = new Set(info.apps.map((a) => a.pkg));
+  const term = search.trim().toLowerCase();
+  const others = (all ?? []).filter((a) => !known.has(a.pkg) && (!term || a.label.toLowerCase().includes(term)));
+
+  return (
+    <div className="stack">
+      {ask.length > 0 && (
+        <div className="stack" aria-label="Apps novos">
+          {ask.map((a) => (
+            <div key={a.pkg} className="app-ask" data-testid="app-novo">
+              <span><strong>{a.label}</strong> avisou {a.detected === 1 ? "1 valor" : `${a.detected} valores`} em R$. Integrar ao OIKON?</span>
+              <div className="stack-actions">
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => set(a.pkg, true)}>Integrar</button>
+                <button type="button" className="btn btn-sm btn-secondary" onClick={() => set(a.pkg, false)}>Não integrar</button>
+              </div>
+            </div>
+          ))}
+          <p className="hint">Até você decidir, o que chegou desses apps fica só no celular. Integrando, já vem para confirmar.</p>
+        </div>
+      )}
+      {decided.length > 0 && (
+        <div className="bank-apps" aria-label="Apps integrados">
+          {decided.map((a) => (
+            <label key={a.pkg} className="check">
+              <input type="checkbox" checked={a.allowed} onChange={(e) => set(a.pkg, e.target.checked)} />
+              {a.label}
+            </label>
+          ))}
+        </div>
+      )}
+      <details onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !all) setAll(readAllApps(app)); }}>
+        <summary>Integrar outro app</summary>
+        <div className="stack">
+          <input type="search" placeholder="Buscar app pelo nome" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Buscar app" />
+          {all && others.length === 0 && <p className="hint">Nenhum app encontrado.</p>}
+          <ul className="list">
+            {others.slice(0, 50).map((a) => (
+              <li key={a.pkg} className="mini-list-line device-row">
+                <span>{a.label}</span>
+                <button type="button" className="btn btn-sm btn-secondary" onClick={() => set(a.pkg, true)}>Integrar</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
     </div>
   );
 }

@@ -66,10 +66,17 @@ function cleanName(raw: string | undefined): string | null {
   return s.length >= 2 ? s.slice(0, 60) : null;
 }
 
-export function parseBankNotification(input: { packageName: string; title?: string | null; text: string }): ParsedNotification {
+/** Nome do banco: o conhecido pelo pacote, ou o nome do app que o celular mandou (qualquer app pode ser integrado). */
+function institutionFor(packageName: string, appName?: string | null): string | null {
+  if (BANK_APPS[packageName]) return BANK_APPS[packageName];
+  const name = appName?.replace(/\s+/g, " ").trim();
+  return name && name !== packageName && name.length <= 60 ? name : null;
+}
+
+export function parseBankNotification(input: { packageName: string; appName?: string | null; title?: string | null; text: string }): ParsedNotification {
   const raw = `${input.title ?? ""}\n${input.text}`.trim();
   const n = norm(raw);
-  const institution = BANK_APPS[input.packageName] ?? null;
+  const institution = institutionFor(input.packageName, input.appName);
   const amountMatch = raw.match(/R\$\s*-?\s*([\d.]+,\d{2}|\d+(?:\.\d{2})?)/i);
   const amount = amountMatch ? Math.abs(parseStatementAmount(amountMatch[1]) ?? 0) || null : null;
   const last4 = n.match(/(?:final|terminad[oa] em|cartao(?: de credito| de debito)?(?: virtual)?(?: com final)?)\s*(?:n[oº.]*\s*)?\*{0,4}\s*(\d{4})\b/)?.[1] ?? null;

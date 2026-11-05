@@ -8,6 +8,7 @@ export type OikonApp = {
   link(code: string): void;
   unlink(): void;
   setApp(pkg: string, enabled: boolean): void;
+  allApps(): string;
   setPaused(paused: boolean): void;
   openNotificationAccess(): void;
   openSetup(): void;
@@ -23,8 +24,11 @@ export type OikonAppInfo = {
   pending: number;
   lastSync: number;
   lastError: string | null;
-  apps: { pkg: string; label: string; allowed: boolean }[];
+  apps: OikonAppEntry[];
 };
+
+/** "ask": o app avisou valores e espera a pessoa decidir se integra. */
+export type OikonAppEntry = { pkg: string; label: string; state: "on" | "off" | "ask"; allowed: boolean; detected: number; known: boolean };
 
 /** Detalhe do evento "oikon-app" que o app dispara quando algo muda no celular. */
 export type OikonAppEvent = { linked?: boolean; error?: string; synced?: boolean } | null;
@@ -48,4 +52,13 @@ export function useOikonApp(): OikonApp | null {
   const [app, setApp] = useState<OikonApp | null>(null);
   useEffect(() => setApp(getOikonApp()), []);
   return app;
+}
+
+export function readAllApps(app: OikonApp): { pkg: string; label: string }[] {
+  try {
+    const list = JSON.parse(app.allApps()) as { pkg: string; label: string }[];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
 }

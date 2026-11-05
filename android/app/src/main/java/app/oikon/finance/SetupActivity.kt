@@ -3,7 +3,6 @@ package app.oikon.finance
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -91,22 +90,17 @@ class SetupActivity : Activity() {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
 
-        section("3. Apps de banco que o OIKON pode ler")
-        val installed = Config.BANK_APPS.filterKeys { isInstalled(it) }
-        if (installed.isEmpty()) {
-            text("Nenhum app de banco conhecido instalado neste celular.", muted)
-        } else {
-            text("Só as notificações desses apps, e só as que têm valor em R$, saem do celular.", muted)
-            for ((pkg, label) in installed) {
-                root.addView(CheckBox(this).apply {
-                    text = label
-                    setTextColor(Color.WHITE)
-                    isChecked = pkg in prefs.allowedApps
-                    setOnCheckedChangeListener { _, checked ->
-                        prefs.allowedApps = if (checked) prefs.allowedApps + pkg else prefs.allowedApps - pkg
-                    }
-                })
-            }
+        section("3. Apps que o OIKON pode ler")
+        text("Qualquer app pode ser integrado. Quando um app novo avisa um valor em R$, o OIKON pergunta. Só as notificações com valor dos apps marcados saem do celular.", muted)
+        val apps = Apps.list(this)
+        if (apps.isEmpty()) text("Nenhum app ainda. Assim que um app avisar um valor, ele aparece aqui.", muted)
+        for (a in apps) {
+            root.addView(CheckBox(this).apply {
+                text = if (a.state == Apps.ASK) "${a.label} (novo: ${a.detected} com valor, esperando você decidir)" else a.label
+                setTextColor(Color.WHITE)
+                isChecked = a.state == Apps.ON
+                setOnCheckedChangeListener { _, checked -> Apps.decide(this@SetupActivity, a.pkg, checked) }
+            })
         }
 
         section("4. Situação")
@@ -135,6 +129,7 @@ class SetupActivity : Activity() {
             val status = when (n.status) {
                 "enviada" -> "enviada"
                 "erro" -> "erro: ${n.error ?: ""}"
+                HELD -> "esperando você decidir se integra o app"
                 else -> "esperando envio"
             }
             text("${n.appName} · ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(n.postedAt))} · $status\n${n.title?.let { "$it: " } ?: ""}${n.text}", if (n.status == "erro") bad else Color.WHITE, small = true)
@@ -193,13 +188,6 @@ class SetupActivity : Activity() {
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
         val me = ComponentName(this, CaptureService::class.java).flattenToString()
         return flat.split(":").any { it == me }
-    }
-
-    private fun isInstalled(pkg: String): Boolean = try {
-        packageManager.getApplicationInfo(pkg, 0)
-        true
-    } catch (e: PackageManager.NameNotFoundException) {
-        false
     }
 
     // ---- pequenos ajudantes de tela ----
