@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
-const publicPaths = ["/login", "/cadastro", "/privacidade", "/termos", "/exclusao-de-dados"];
+const publicPaths = ["/conheca", "/login", "/cadastro", "/privacidade", "/termos", "/exclusao-de-dados"];
 
 function contentSecurityPolicy(nonce: string, https: boolean): string {
   const dev = process.env.NODE_ENV !== "production";
@@ -34,7 +34,11 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/whatsapp/") ||
     request.nextUrl.pathname.startsWith("/api/app/");
   if (!isPublic && !(await verifySession(request.cookies.get(SESSION_COOKIE)?.value))) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // Quem chega pelo endereço principal sem estar logado vê a página de vendas; dentro do app
+    // Android (que já é o OIKON) e nas demais telas, vai direto para o login.
+    const inApp = request.headers.get("user-agent")?.includes("OikonAndroid/") ?? false;
+    const target = request.nextUrl.pathname === "/" && !inApp ? "/conheca" : "/login";
+    return NextResponse.redirect(new URL(target, request.url));
   }
 
   const nonce = btoa(crypto.randomUUID());

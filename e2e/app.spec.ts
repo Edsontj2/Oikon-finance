@@ -2,8 +2,10 @@ import { expect, test } from "@playwright/test";
 import { R, dialog, expectSaldos, expectToast, lancar, login, logout, signup } from "./helpers";
 
 test("fluxo completo: contas, lançamentos, pendentes, transferência, categorias e painel", async ({ page }) => {
-  // Sem login, tudo leva para a tela de entrar.
+  // Sem login, o endereço principal mostra a página de vendas e as outras telas levam ao login.
   await page.goto("/");
+  await expect(page).toHaveURL(/\/conheca$/);
+  await page.goto("/contas");
   await expect(page).toHaveURL(/\/login$/);
 
   await signup(page, "Edson");
