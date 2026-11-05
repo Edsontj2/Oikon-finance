@@ -7,6 +7,7 @@ import { monthParam, type SearchParams } from "@/lib/search-params";
 import { getDashboard } from "@/data/dashboard";
 import { getOverview } from "@/data/overview";
 import { countPendingNotifications } from "@/data/bank-notifications";
+import { getAccess } from "@/data/subscriptions";
 import { balanceForecast } from "@/data/forecast";
 import { formatMoney } from "@/lib/money";
 import { LineChart } from "@/components/line-chart";
@@ -30,11 +31,12 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
   const userId = await requireUserId();
   const month = monthParam(await searchParams);
   const db = getDb();
-  const [d, overview, forecast, pendingNotifications] = await Promise.all([
+  const [d, overview, forecast, pendingNotifications, access] = await Promise.all([
     getDashboard(db, userId, month),
     getOverview(db, userId),
     balanceForecast(db, userId),
     countPendingNotifications(db, userId),
+    getAccess(db, userId),
   ]);
   const result = d.month.income - d.month.expense;
   const isCurrentMonth = month === d.today.slice(0, 7);
@@ -51,6 +53,11 @@ export default async function PainelPage({ searchParams }: { searchParams: Searc
         <h1>Painel</h1>
       </div>
       <MonthNav month={month} path="/" />
+      {access.trialAvailable && (
+        <Link href="/assinatura" className="card notice-link" data-testid="aviso-teste">
+          Experimente o OIKON Inteligente por {access.trialDays} dias grátis, sem cartão →
+        </Link>
+      )}
       {pendingNotifications > 0 && (
         <Link href="/notificacoes" className="card notice-link" data-testid="aviso-notificacoes">
           {pendingNotifications === 1 ? "1 notificação do banco aguardando confirmação" : `${pendingNotifications} notificações do banco aguardando confirmação`} →

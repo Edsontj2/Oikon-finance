@@ -24,3 +24,19 @@ export function num(value: unknown): number {
   if (!Number.isSafeInteger(n)) throw new Error(`Valor fora do intervalo seguro: ${String(value)}`);
   return n;
 }
+
+/** Executa várias instruções numa transação (tudo ou nada). Quem chama passa o Pool. */
+export async function inTransaction<T>(pool: Pool, fn: (client: Pick<Pool, "query">) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}

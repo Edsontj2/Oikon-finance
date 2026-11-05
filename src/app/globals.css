@@ -684,3 +684,30 @@ a.horizon:hover { background: rgba(255, 255, 255, 0.06); }
 .notification-card .mini-list-line { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
 .notification-text { margin: 0; padding: 0.6rem 0.8rem; border-left: 3px solid var(--primary); background: rgba(255, 255, 255, 0.04); border-radius: 8px; font-size: 0.9rem; color: var(--muted); white-space: pre-line; }
 .notice-link { display: block; color: var(--primary); text-decoration: none; font-weight: 600; margin-bottom: 1rem; }
+
+/* ---------- Planos ---------- */
+.plan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+@media (max-width: 900px) { .plan-grid { grid-template-columns: 1fr; } }
+.plan-card {
+  position: relative; display: flex; flex-direction: column; gap: 0.6rem; padding: 1.5rem; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--glass-shine);
+}
+.plan-popular { border-color: color-mix(in oklab, var(--primary) 60%, transparent); background: color-mix(in oklab, var(--primary) 7%, var(--glass)); }
+.plan-badge {
+  position: absolute; top: -0.75rem; left: 1.25rem; display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; background: var(--primary); color: var(--on-primary);
+}
+.plan-card h3 { margin: 0.25rem 0 0; font-size: 1.2rem; }
+.plan-tagline { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.plan-price { display: flex; align-items: baseline; gap: 0.35rem; margin-top: 0.4rem; }
+.plan-price strong { font-size: 2rem; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.plan-price span { color: var(--muted); }
+.plan-old { color: var(--muted); font-size: 1rem; }
+.plan-offer { margin: 0; font-size: 0.82rem; color: var(--primary); }
+.plan-items { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.45rem; flex: 1; }
+.plan-items li { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.93rem; line-height: 1.4; }
+.plan-items svg { color: var(--success); flex-shrink: 0; margin-top: 0.1rem; }
+.plan-items .plan-no { color: var(--muted); padding-left: 1.5rem; }
+.plan-action { margin-top: 0.75rem; display: grid; gap: 0.4rem; }
+.plan-action .btn { justify-content: center; }
+.plan-status { display: grid; gap: 0.35rem; }

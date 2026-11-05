@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BellRing, CalendarRange, CreditCard, FileText, FileUp, HandCoins, Settings, Tags, Target } from "lucide-react";
+import { BadgeCheck, BellRing, CalendarRange, CreditCard, FileText, FileUp, HandCoins, Settings, Tags, Target } from "lucide-react";
 
 /** No celular, a barra de baixo tem 5 abas; o resto fica aqui. */
 export default function MaisPage() {
@@ -12,6 +12,7 @@ export default function MaisPage() {
     { href: "/importar", label: "Importar extrato (OFX ou CSV)", icon: FileUp },
     { href: "/relatorio", label: "Relatório do mês (PDF e CSV)", icon: FileText },
     { href: "/categorias", label: "Categorias", icon: Tags },
+    { href: "/assinatura", label: "Assinatura e planos", icon: BadgeCheck },
     { href: "/configuracoes", label: "Configurações e WhatsApp", icon: Settings },
   ];
   return (

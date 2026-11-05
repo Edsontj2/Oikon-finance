@@ -6,6 +6,9 @@ import {
   Repeat, ShieldCheck, Smartphone, Target, Wallet,
 } from "lucide-react";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { getDb } from "@/lib/db";
+import { getLaunchOffer, getSettings, listPlans } from "@/data/subscriptions";
+import { PlanCards } from "@/components/plan-cards";
 import { Logo } from "../../logo";
 import "./landing.css";
 
@@ -60,6 +63,8 @@ const faq = [
 
 export default async function Landing() {
   const logged = Boolean(await verifySession((await cookies()).get(SESSION_COOKIE)?.value));
+  const db = getDb();
+  const [plans, offer, settings] = await Promise.all([listPlans(db), getLaunchOffer(db), getSettings(db)]);
   const primary = logged ? { href: "/", label: "Abrir meu OIKON" } : { href: "/cadastro", label: "Criar minha conta" };
 
   return (
@@ -69,6 +74,7 @@ export default async function Landing() {
         <nav className="lp-top-nav" aria-label="Principal">
           <a href="#recursos">Recursos</a>
           <a href="#banco">Notificações do banco</a>
+          {settings.plansPublic && <a href="#planos">Planos</a>}
           <a href="#duvidas">Dúvidas</a>
           {logged ? (
             <Link href="/" className="btn btn-primary btn-sm">Abrir</Link>
@@ -219,6 +225,23 @@ export default async function Landing() {
             <Link href={primary.href} className="btn btn-secondary btn-sm">{logged ? "Abrir" : "Começar"}</Link>
           </div>
         </section>
+
+        {settings.plansPublic && <section id="planos" className="lp-section">
+          <div className="lp-section-head">
+            <p className="lp-kicker">Planos</p>
+            <h2>Escolha o seu OIKON</h2>
+            {settings.trialDays > 0 && <p>Teste o Inteligente por {settings.trialDays} dias grátis, sem cartão. Cancele quando quiser.</p>}
+          </div>
+          <PlanCards
+            plans={plans}
+            offer={offer}
+            action={(plan) => (
+              <Link href={logged ? "/assinatura" : "/cadastro"} className={`btn ${plan.id === "inteligente" ? "btn-primary" : "btn-secondary"}`}>
+                {logged ? "Ver na minha conta" : plan.id === "inteligente" && settings.trialDays > 0 ? "Começar teste grátis" : "Criar minha conta"}
+              </Link>
+            )}
+          />
+        </section>}
 
         <section id="duvidas" className="lp-section lp-faq">
           <div className="lp-section-head"><h2>Dúvidas comuns</h2></div>

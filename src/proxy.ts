@@ -29,10 +29,12 @@ function contentSecurityPolicy(nonce: string, https: boolean): string {
 export async function proxy(request: NextRequest) {
   // O webhook do WhatsApp não tem login: ele se autentica pela assinatura da Meta.
   // O app Android se autentica pelo token do celular (Authorization), não pelo cookie.
+  // O webhook de pagamentos se autentica pela assinatura do gateway.
   const isPublic =
     publicPaths.includes(request.nextUrl.pathname) ||
     request.nextUrl.pathname.startsWith("/api/whatsapp/") ||
-    request.nextUrl.pathname.startsWith("/api/app/");
+    request.nextUrl.pathname.startsWith("/api/app/") ||
+    request.nextUrl.pathname.startsWith("/api/pagamentos/");
   if (!isPublic && !(await verifySession(request.cookies.get(SESSION_COOKIE)?.value))) {
     // Quem chega pelo endereço principal sem estar logado vê a página de vendas; dentro do app
     // Android (que já é o OIKON) e nas demais telas, vai direto para o login.
