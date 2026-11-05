@@ -634,3 +634,9 @@ a.horizon:hover { background: rgba(255, 255, 255, 0.06); }
 .negative-text { color: var(--error); }
 .row-projected { opacity: 0.85; }
 .row-projected .row-title { font-style: italic; }
+.import-line { display: grid; gap: 0.35rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+.import-line:last-child { border-bottom: 0; }
+.import-line .mini-list-line { display: flex; justify-content: space-between; gap: 0.75rem; }
+/* Na página (não numa janela): o pé com os botões fica acima da barra de baixo do celular. */
+.import-actions { margin: 0.75rem -1rem -1rem; border-radius: 0 0 var(--radius) var(--radius); padding-bottom: 0.75rem; }
+@media (max-width: 1023px) { .import-actions { bottom: calc(var(--bottom-nav) + var(--nav-gap) + 0.5rem); border-radius: var(--radius); } }

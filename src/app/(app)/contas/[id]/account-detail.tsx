@@ -55,7 +55,8 @@ export function AccountDetail({
         <h2 id="conciliar-title" className="card-title">Conciliar com o extrato</h2>
         <p className="muted">
           Informe o saldo que o banco mostra. Se for diferente do app, é lançado um ajuste que corrige o saldo (não conta como
-          receita nem despesa). Antes, confira se não faltou lançar algo.
+          receita nem despesa). Antes, confira se não faltou lançar algo:{" "}
+          <Link href={`/importar?conta=${account.id}`}>importe o extrato (OFX ou CSV)</Link> e o app mostra o que falta.
         </p>
         <form
           key={formKey}

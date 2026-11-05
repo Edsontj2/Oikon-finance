@@ -71,6 +71,12 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## Importar extrato (OFX e CSV)
+
+- Em **Mais → Importar extrato** (ou na tela da conta), escolha a conta e envie o arquivo. OFX é o mais confiável (traz o identificador de cada lançamento); CSV com cabeçalho também serve (Data, Descrição/Histórico, Valor ou Débito/Crédito). Planilha do Excel: salve como CSV.
+- Antes de gravar, cada linha aparece como **Novo**, **Já lançado** (lançado à mão e pago, ±3 dias), **Confirma um pendente** (conta pendente paga até 10 dias antes do vencimento: vira paga na data do extrato) ou **Já importado**. A categoria é sugerida pela última usada numa descrição igual.
+- O identificador da linha fica em `transactions.import_ref` (único por conta, migração 0013): reimportar o mesmo arquivo não duplica nada. Linhas de saldo e valor zero são ignoradas; nada é inventado.
+
 ## Planejamento, metas e panorama
 
 - **Todo mês (sem fim):** o lançamento recorrente gera um lançamento por mês quando o mês chega (pendente), até a pessoa excluir com "Parar de repetir". Os meses futuros não existem no banco, por isso o pendente mostra só o mês atual (`recurring_rules`, migração 0010).
