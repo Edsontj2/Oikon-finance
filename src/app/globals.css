@@ -640,3 +640,30 @@ a.horizon:hover { background: rgba(255, 255, 255, 0.06); }
 /* Na página (não numa janela): o pé com os botões fica acima da barra de baixo do celular. */
 .import-actions { margin: 0.75rem -1rem -1rem; border-radius: 0 0 var(--radius) var(--radius); padding-bottom: 0.75rem; }
 @media (max-width: 1023px) { .import-actions { bottom: calc(var(--bottom-nav) + var(--nav-gap) + 0.5rem); border-radius: var(--radius); } }
+
+/* ---------- Relatório (tela e impressão/PDF) ---------- */
+.report-head h2 { margin: 1rem 0 0.15rem; font-size: 1.25rem; }
+.report-head p { margin: 0 0 1rem; color: var(--muted); font-size: 0.9rem; }
+.report-section { margin: 1.25rem 0; }
+.report-section h3 { font-size: 1rem; margin: 0 0 0.5rem; }
+.report-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.report-table th, .report-table td { padding: 0.4rem 0.35rem; border-bottom: 1px solid var(--border); text-align: right; vertical-align: top; }
+.report-table th[scope="row"], .report-table thead th:first-child, .report-table td:first-child { text-align: left; font-weight: 500; }
+.report-small { font-size: 0.8rem; }
+.report-small td:first-child { white-space: nowrap; }
+.report-small thead th:nth-child(2) { text-align: left; }
+.report-child th { padding-left: 1.25rem; color: var(--muted); }
+@media (max-width: 600px) { .report-section { overflow-x: auto; } }
+@media print {
+  @page { margin: 14mm; }
+  :root { color-scheme: light; }
+  body { background: #fff !important; color: #111 !important; font-size: 11pt; }
+  body::before, .topbar, .sidebar, .bottom-nav, .toasts, .no-print, .route-progress { display: none !important; }
+  .shell-main, .content { padding: 0 !important; margin: 0 !important; }
+  html, body, .shell, .shell-main, .content { min-height: 0 !important; height: auto !important; }
+  .report-head p, .hint { color: #555 !important; }
+  .report-table th, .report-table td { border-color: #ccc; color: #111; }
+  .report-section { break-inside: avoid-page; }
+  .report-small tr { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}

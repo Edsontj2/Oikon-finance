@@ -71,6 +71,11 @@ npm run test:e2e   # o app inteiro no navegador (Playwright)
 
 O e2e usa um banco separado (`E2E_DATABASE_URL`, padrão `oikon_e2e`).
 
+## Relatório e exportação
+
+- **Mais → Relatório** (`/relatorio?mes=`): resumo do mês, gastos por categoria (com limites), contas, cartões, dívidas e lançamentos. O botão "Salvar em PDF" abre a impressão do navegador; o estilo de impressão tira o menu e as cores (fundo branco, 1 página quando cabe).
+- **Exportar CSV** (`/api/exportar?mes=`): todos os lançamentos do mês (ou todos, sem `mes`), separador `;` e vírgula decimal para abrir direto no Excel. Texto que começa com `=`, `+`, `-` ou `@` ganha um apóstrofo para não virar fórmula. Exige login.
+
 ## Importar extrato (OFX e CSV)
 
 - Em **Mais → Importar extrato** (ou na tela da conta), escolha a conta e envie o arquivo. OFX é o mais confiável (traz o identificador de cada lançamento); CSV com cabeçalho também serve (Data, Descrição/Histórico, Valor ou Débito/Crédito). Planilha do Excel: salve como CSV.
