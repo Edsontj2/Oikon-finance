@@ -47,6 +47,15 @@ class UploadJob : JobService() {
             val prefs = Prefs(context)
             val token = prefs.token ?: return false
             val queue = Queue(context)
+            var toConfirm = 0
+            try {
+                return drain(prefs, token, queue) { toConfirm += it }
+            } finally {
+                if (toConfirm > 0) Alerts.newPending(context, toConfirm)
+            }
+        }
+
+        private fun drain(prefs: Prefs, token: String, queue: Queue, onAccepted: (Int) -> Unit): Boolean {
             while (true) {
                 val batch = queue.pending(50)
                 if (batch.isEmpty()) break
@@ -54,6 +63,7 @@ class UploadJob : JobService() {
                 when {
                     result.ok -> {
                         queue.mark(batch.map { it.id }, "enviada")
+                        onAccepted(result.body?.optInt("toConfirm") ?: 0)
                         prefs.lastSync = System.currentTimeMillis()
                         prefs.lastError = null
                     }

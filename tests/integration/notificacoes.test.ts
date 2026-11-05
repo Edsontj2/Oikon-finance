@@ -48,8 +48,8 @@ describe("app de notificações", () => {
       { id: "n3", package: "com.nu.production", text: "Compra de R$ 300,00 recusada no cartão final 4589", postedAt: at(3) },
       { id: "../x", package: "com.nu.production", text: "R$ 1,00", postedAt: at(1) },
     ];
-    expect(await ingestNotifications(db, s.device, batch)).toEqual({ accepted: 3, duplicates: 0, invalid: 1 });
-    expect(await ingestNotifications(db, s.device, batch)).toEqual({ accepted: 0, duplicates: 3, invalid: 1 });
+    expect(await ingestNotifications(db, s.device, batch)).toEqual({ accepted: 3, toConfirm: 2, duplicates: 0, invalid: 1 });
+    expect(await ingestNotifications(db, s.device, batch)).toEqual({ accepted: 0, toConfirm: 0, duplicates: 3, invalid: 1 });
     const pending = await listNotifications(db, s.userId);
     expect(pending.map((n) => [n.parsed.kind, n.suggestion.accountId, n.suggestion.accountSure, n.suggestion.description])).toEqual([
       ["pix_out", s.nubank, true, "Pix para João Silva"],

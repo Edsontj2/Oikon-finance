@@ -3,6 +3,7 @@ package app.oikon.finance
 /** Endereço do OIKON e apps de banco conhecidos (nome para mostrar na tela). */
 object Config {
     const val SERVER = "https://oikon-finance.vercel.app"
+    const val SMS_APP = "com.google.android.apps.messaging"
 
     val BANK_APPS: Map<String, String> = linkedMapOf(
         "com.nu.production" to "Nubank",

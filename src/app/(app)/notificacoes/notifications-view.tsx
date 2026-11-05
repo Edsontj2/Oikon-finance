@@ -13,7 +13,9 @@ import { formatMoney } from "@/lib/money";
 import { MoneyInput } from "@/components/money-input";
 import { FormError } from "@/components/form-error";
 import { useServerAction } from "@/components/use-server-action";
+import { useOikonApp } from "@/lib/oikon-app";
 import { confirmBankNotification, generateDeviceCode, ignoreBankNotification, pauseNotifications, unlinkDevice } from "./actions";
+import { ThisPhone } from "./this-phone";
 
 const statusLabel: Record<BankNotification["status"], string> = { pending: "Pendente", confirmed: "Lançada", ignored: "Ignorada", discarded: "Sem movimentação" };
 
@@ -25,36 +27,46 @@ export function NotificationsView({ pending, done, devices, paused, accounts, ca
   const unlink = useServerAction(unlinkDevice);
   const pause = useServerAction(pauseNotifications);
   const active = devices.filter((d) => !d.revokedAt);
+  const app = useOikonApp();
 
   return (
     <>
       <div className="page-head"><h1>Notificações do banco</h1></div>
 
       <section className="card stack" aria-labelledby="celular-title">
-        <h2 id="celular-title" className="card-icon-title"><Smartphone size={18} aria-hidden /> App no celular (Android)</h2>
-        <p className="muted">
-          O app OIKON lê as notificações dos apps de banco que você escolher (compra aprovada, Pix enviado ou recebido) e manda para cá.
-          Nada é lançado sozinho: cada uma aparece aqui para você confirmar. No iPhone a Apple não permite ler notificações de outros apps; use{" "}
-          <a href="/importar">Importar extrato</a>.
-        </p>
-        <ol className="steps">
-          <li><a href="https://github.com/Edsontj2/Oikon-finance/releases/latest/download/oikon.apk">Baixe o app (APK)</a> no celular Android e instale (permita &quot;instalar apps desconhecidos&quot; para o navegador).</li>
-          <li>Abra o app, toque em <strong>Vincular</strong> e digite o código abaixo.</li>
-          <li>No app, permita o acesso às notificações e marque os apps de banco.</li>
-        </ol>
-        <div className="stack-actions">
-          <button type="button" className="btn btn-primary" disabled={generating} onClick={() => start(async () => setCode(await generateDeviceCode()))}>
-            {code ? "Gerar outro código" : "Gerar código de vínculo"}
-          </button>
-          {code && (
-            <span className="link-code" data-testid="codigo-celular" aria-live="polite">
-              <strong>{code.code.replace(/(\d{4})(\d{4})/, "$1 $2")}</strong>
-              <span className="hint"> vale 10 minutos, uma vez</span>
-            </span>
-          )}
-        </div>
+        <h2 id="celular-title" className="card-icon-title"><Smartphone size={18} aria-hidden /> {app ? "Este celular" : "App no celular (Android)"}</h2>
+        {app ? (
+          <ThisPhone app={app} />
+        ) : (
+          <>
+            <p className="muted">
+              Instale o app OIKON no Android: é o OIKON completo e, além disso, lê as notificações dos apps de banco que você escolher
+              (compra aprovada, Pix enviado ou recebido). Nada é lançado sozinho: cada uma aparece aqui para você confirmar. No iPhone a
+              Apple não permite ler notificações de outros apps; use <a href="/importar">Importar extrato</a>.
+            </p>
+            <ol className="steps">
+              <li><a href="https://github.com/Edsontj2/Oikon-finance/releases/latest/download/oikon.apk">Baixe o app (APK)</a> no celular Android e instale (permita &quot;instalar apps desconhecidos&quot; para o navegador).</li>
+              <li>Abra o app e entre com seu e-mail e senha.</li>
+              <li>Em <strong>Mais → Notificações do banco</strong>, toque em <strong>Ativar neste celular</strong> e permita o acesso às notificações.</li>
+            </ol>
+            <details>
+              <summary>Vincular com código (versão antiga do app)</summary>
+              <div className="stack-actions">
+                <button type="button" className="btn btn-secondary" disabled={generating} onClick={() => start(async () => setCode(await generateDeviceCode()))}>
+                  {code ? "Gerar outro código" : "Gerar código de vínculo"}
+                </button>
+                {code && (
+                  <span className="link-code" data-testid="codigo-celular" aria-live="polite">
+                    <strong>{code.code.replace(/(\d{4})(\d{4})/, "$1 $2")}</strong>
+                    <span className="hint"> vale 10 minutos, uma vez</span>
+                  </span>
+                )}
+              </div>
+            </details>
+          </>
+        )}
         {active.length > 0 && (
-          <ul className="list">
+          <ul className="list" aria-label="Celulares vinculados">
             {active.map((d) => (
               <li key={d.id} className="mini-list-line device-row">
                 <span>{d.name}<span className="hint"> · vinculado em {formatDate(d.createdAt.slice(0, 10))}{d.lastSeenAt ? ` · último envio ${formatDate(d.lastSeenAt.slice(0, 10))}` : ""}</span></span>

@@ -82,11 +82,11 @@ function validIncoming(n: IncomingNotification): boolean {
 }
 
 /** Recebe um lote do celular. Reenviar o mesmo lote não duplica (id do celular é único). */
-export async function ingestNotifications(db: Db, device: DeviceAuth, items: IncomingNotification[]): Promise<{ accepted: number; duplicates: number; invalid: number }> {
+export async function ingestNotifications(db: Db, device: DeviceAuth, items: IncomingNotification[]): Promise<{ accepted: number; toConfirm: number; duplicates: number; invalid: number }> {
   if (device.paused) throw new UserError("A leitura de notificações está pausada no site.");
   if (!Array.isArray(items) || items.length > MAX_BATCH) throw new UserError(`Envie até ${MAX_BATCH} notificações por vez.`);
   const valid = items.filter(validIncoming);
-  if (!valid.length) return { accepted: 0, duplicates: 0, invalid: items.length };
+  if (!valid.length) return { accepted: 0, toConfirm: 0, duplicates: 0, invalid: items.length };
   const { rows: accounts } = await db.query<AccountRow>(
     "SELECT id, name, type, institution, last4 FROM accounts WHERE user_id = $1 AND NOT archived AND type <> 'loan'",
     [device.userId],
@@ -97,13 +97,13 @@ export async function ingestNotifications(db: Db, device: DeviceAuth, items: Inc
     const status = direction && parsed.confidence >= 0.5 ? "pending" : "discarded";
     return { n, parsed, status };
   });
-  const { rows } = await db.query<{ id: string }>(
+  const { rows } = await db.query<{ id: string; status: string }>(
     `INSERT INTO bank_notifications (user_id, device_id, external_id, package, app_name, title, body, posted_at, status, parsed)
      SELECT $1, $2, d.ext, d.pkg, left(d.app, 80), left(d.title, 200), left(d.body, 1000), d.posted, d.status, d.parsed
        FROM unnest($3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[], $9::text[], $10::jsonb[])
             AS d(ext, pkg, app, title, body, posted, status, parsed)
      ON CONFLICT (user_id, external_id) DO NOTHING
-     RETURNING id`,
+     RETURNING id, status`,
     [
       device.userId, device.deviceId,
       records.map((r) => r.n.id), records.map((r) => r.n.package), records.map((r) => r.n.appName ?? null),
@@ -111,7 +111,12 @@ export async function ingestNotifications(db: Db, device: DeviceAuth, items: Inc
       records.map((r) => r.status), records.map((r) => JSON.stringify({ ...r.parsed, account: suggestAccount(accounts, r.parsed) })),
     ],
   );
-  return { accepted: rows.length, duplicates: valid.length - rows.length, invalid: items.length - valid.length };
+  return {
+    accepted: rows.length,
+    toConfirm: rows.filter((r) => r.status === "pending").length,
+    duplicates: valid.length - rows.length,
+    invalid: items.length - valid.length,
+  };
 }
 
 export async function listNotifications(db: Db, userId: string, status: "pending" | "done" = "pending"): Promise<BankNotification[]> {
