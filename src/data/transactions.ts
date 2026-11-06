@@ -402,3 +402,19 @@ export async function deleteTransaction(
   ]);
   return rowCount ?? 0;
 }
+
+/** Quantos lançamentos dá para excluir de uma vez. */
+export const MAX_BULK_DELETE = 500;
+
+/**
+ * Exclui vários lançamentos de uma vez (só os da pessoa; ids de outra pessoa ou inexistentes são
+ * ignorados). Cada um é excluído como no "Só este" da exclusão individual. Devolve quantos apagou.
+ */
+export async function deleteTransactions(db: Db, userId: string, ids: unknown): Promise<number> {
+  if (!Array.isArray(ids) || ids.length === 0) throw new UserError("Selecione ao menos um lançamento.");
+  if (ids.length > MAX_BULK_DELETE) throw new UserError(`Selecione até ${MAX_BULK_DELETE} lançamentos por vez.`);
+  const valid = [...new Set(ids.filter(isUuid))];
+  if (!valid.length) return 0;
+  const { rowCount } = await db.query("DELETE FROM transactions WHERE user_id = $1 AND id = ANY($2::uuid[])", [userId, valid]);
+  return rowCount ?? 0;
+}

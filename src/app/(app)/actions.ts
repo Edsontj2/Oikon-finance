@@ -12,6 +12,7 @@ import {
   updateTransaction,
   type TransactionInput,
   type TransactionType,
+  deleteTransactions,
 } from "@/data/transactions";
 import { UserError } from "@/data/errors";
 import { payProjectedNow, stopRecurring } from "@/data/recurring";
@@ -76,6 +77,17 @@ export async function removeTransaction(id: string, scope: "one" | "future"): Pr
     const removed = await deleteTransaction(getDb(), userId, id, scope === "future" ? "future" : "one");
     if (!removed) throw new UserError("Lançamento não encontrado.");
   });
+}
+
+/** Excluir vários de uma vez (seleção na lista de lançamentos). */
+export async function removeTransactions(ids: string[]): Promise<ActionResult> {
+  const userId = await requireUserId();
+  let removed = 0;
+  const result = await runAction("", async () => {
+    removed = await deleteTransactions(getDb(), userId, ids);
+    if (!removed) throw new UserError("Nenhum lançamento encontrado para excluir.");
+  });
+  return result.ok ? { ok: true, message: removed === 1 ? "1 lançamento excluído." : `${removed} lançamentos excluídos.` } : result;
 }
 
 export async function saveAccount(form: FormData): Promise<ActionResult> {

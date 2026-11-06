@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, ChevronRight, Plus, Repeat } from "lucide-react";
+import { Check, CheckSquare, ChevronRight, Plus, Repeat, Trash2, X } from "lucide-react";
 import type { AccountOption } from "@/domain/accounts";
 import type { CategoryOption } from "@/domain/categories";
 import { signedAmount, transactionTypes, type Transaction } from "@/domain/transactions";
@@ -11,7 +11,7 @@ import { Money } from "@/components/money";
 import { Modal } from "@/components/modal";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useServerAction } from "@/components/use-server-action";
-import { payProjected, removeTransaction, setTransactionPaid, stopProjected } from "../actions";
+import { payProjected, removeTransaction, removeTransactions, setTransactionPaid, stopProjected } from "../actions";
 import { TransactionForm } from "./transaction-form";
 
 type Props = {
@@ -31,7 +31,29 @@ export function TransactionsView({ transactions, accounts, categories, emptyMess
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [projected, setProjected] = useState<Transaction | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const bulk = useServerAction(removeTransactions, () => {
+    setConfirmBulk(false);
+    setSelected(new Set());
+    setSelecting(false);
+  });
   const todayStr = today();
+  const selectable = transactions.filter((t) => !t.projected);
+  const toggle = (ids: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
 
   const groups = new Map<string, Transaction[]>();
   for (const t of transactions) {
@@ -43,11 +65,22 @@ export function TransactionsView({ transactions, accounts, categories, emptyMess
     <>
       <div className="page-head">
         <h1>Lançamentos</h1>
-        {accounts.length > 0 && (
-          <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-            <Plus size={18} aria-hidden /> Novo lançamento
-          </button>
-        )}
+        <div className="page-head-actions">
+          {selectable.length > 0 && (selecting ? (
+            <button type="button" className="btn btn-secondary" onClick={stopSelecting}>
+              <X size={18} aria-hidden /> Cancelar seleção
+            </button>
+          ) : (
+            <button type="button" className="btn btn-secondary" onClick={() => setSelecting(true)}>
+              <CheckSquare size={18} aria-hidden /> Selecionar
+            </button>
+          ))}
+          {accounts.length > 0 && !selecting && (
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              <Plus size={18} aria-hidden /> Novo lançamento
+            </button>
+          )}
+        </div>
       </div>
       {toolbar}
 
@@ -64,21 +97,53 @@ export function TransactionsView({ transactions, accounts, categories, emptyMess
           </button>
         </div>
       ) : (
-        [...groups].map(([month, items]) => (
-          <section key={month} className="list-group">
-            <h2 className="list-group-title">{formatMonth(month)}</h2>
-            <ul className="list card">
-              {items.map((t) => (
-                t.projected ? (
-                  <ProjectedRow key={t.id} t={t} onOpen={() => setProjected(t)} />
-                ) : (
-                  <TransactionRow key={t.id} t={t} todayStr={todayStr} onOpen={() => setEditing(t)} />
-                )
-              ))}
-            </ul>
-          </section>
-        ))
+        [...groups].map(([month, items]) => {
+          const ids = items.filter((t) => !t.projected).map((t) => t.id);
+          const all = ids.length > 0 && ids.every((id) => selected.has(id));
+          return (
+            <section key={month} className="list-group">
+              <h2 className="list-group-title">
+                {selecting && ids.length > 0 ? (
+                  <label className="select-all">
+                    <input type="checkbox" checked={all} onChange={(e) => toggle(ids, e.target.checked)} aria-label={`Selecionar todos de ${formatMonth(month)}`} />
+                    {formatMonth(month)}
+                  </label>
+                ) : formatMonth(month)}
+              </h2>
+              <ul className="list card">
+                {items.map((t) => (
+                  t.projected ? (
+                    selecting ? null : <ProjectedRow key={t.id} t={t} onOpen={() => setProjected(t)} />
+                  ) : selecting ? (
+                    <SelectableRow key={t.id} t={t} checked={selected.has(t.id)} onToggle={(on) => toggle([t.id], on)} />
+                  ) : (
+                    <TransactionRow key={t.id} t={t} todayStr={todayStr} onOpen={() => setEditing(t)} />
+                  )
+                ))}
+              </ul>
+            </section>
+          );
+        })
       )}
+      {selecting && (
+        <div className="bulk-bar" role="region" aria-label="Seleção">
+          <span data-testid="selecionados">{selected.size === 1 ? "1 selecionado" : `${selected.size} selecionados`}</span>
+          <button type="button" className="btn btn-danger" disabled={selected.size === 0} onClick={() => setConfirmBulk(true)}>
+            <Trash2 size={16} aria-hidden /> Excluir
+          </button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={confirmBulk}
+        onClose={() => setConfirmBulk(false)}
+        title={selected.size === 1 ? "Excluir 1 lançamento?" : `Excluir ${selected.size} lançamentos?`}
+        message="Os saldos voltam a ser como se eles não existissem. Só os selecionados são excluídos: outras parcelas e os próximos meses de um lançamento de todo mês continuam."
+        error={bulk.error}
+      >
+        <button type="button" className="btn btn-danger" disabled={bulk.pending} onClick={() => bulk.run([...selected])}>
+          {bulk.pending ? "Excluindo…" : "Excluir"}
+        </button>
+      </ConfirmDialog>
       {footer}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Novo lançamento">
@@ -170,6 +235,22 @@ function ProjectedDialog({ transaction, onClose }: { transaction: Transaction | 
         Pagar agora
       </button>
     </ConfirmDialog>
+  );
+}
+
+/** Linha no modo de seleção: tocar marca ou desmarca. */
+function SelectableRow({ t, checked, onToggle }: { t: Transaction; checked: boolean; onToggle: (on: boolean) => void }) {
+  return (
+    <li className={`row row-selectable${checked ? " row-checked" : ""}`} data-testid="lancamento">
+      <label className="row-main">
+        <input type="checkbox" checked={checked} onChange={(e) => onToggle(e.target.checked)} aria-label={`Selecionar ${t.description}`} />
+        <span className="row-text">
+          <span className="row-title">{t.description}{t.installmentCount ? <span className="tag tag-installment">{t.installmentNumber}/{t.installmentCount}</span> : null}</span>
+          <span className="row-sub">{formatDate(t.date)} · {t.accountName}</span>
+        </span>
+        <span className="row-value"><Money cents={signedAmount(t)} signed={t.type !== "transfer"} /></span>
+      </label>
+    </li>
   );
 }
 

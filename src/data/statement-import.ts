@@ -83,10 +83,10 @@ export async function previewImport(db: Db, userId: string, accountId: string, l
 
 export type ImportDecision = StatementLine & { action: "create" | "reconcile" | "skip"; matchId?: string | null; categoryId?: string | null };
 
-export type ImportResult = { created: number; reconciled: number; skipped: number };
+export type ImportResult = { created: number; reconciled: number; skipped: number; importId: string | null };
 
 /** Grava as linhas escolhidas. Reimportar o mesmo extrato não duplica (import_ref único por conta). */
-export async function applyImport(db: Db, userId: string, accountId: string, decisions: ImportDecision[]): Promise<ImportResult> {
+export async function applyImport(db: Db, userId: string, accountId: string, decisions: ImportDecision[], fileName: string | null = null): Promise<ImportResult> {
   assertUuid(accountId, "Conta não encontrada.");
   if (decisions.length > MAX_STATEMENT_LINES) throw new UserError("Linhas demais.");
   const acc = await db.query("SELECT 1 FROM accounts WHERE id = $1 AND user_id = $2", [accountId, userId]);
@@ -116,32 +116,106 @@ export async function applyImport(db: Db, userId: string, accountId: string, dec
   }
 
   try {
-    const created = create.length
-      ? await db.query(
-          `INSERT INTO transactions (user_id, type, description, amount_cents, date, paid, account_id, category_id, import_ref)
-           SELECT $1, d.type, left(d.description, ${LIMITS.description}), d.amount, d.date, true, $2, d.category, d.ref
-             FROM unnest($3::text[], $4::text[], $5::bigint[], $6::date[], $7::uuid[], $8::text[]) AS d(type, description, amount, date, category, ref)
-           ON CONFLICT (account_id, import_ref) WHERE import_ref IS NOT NULL DO NOTHING`,
-          [
-            userId, accountId,
-            create.map((d) => d.type), create.map((d) => d.description.trim() || (d.type === "income" ? "Entrada" : "Saída")),
-            create.map((d) => d.amount), create.map((d) => d.date), create.map((d) => d.categoryId || null), create.map((d) => d.ref),
-          ],
-        )
-      : { rowCount: 0 };
-    // Conciliar: o pendente lançado à mão vira pago na data do extrato e fica ligado à linha.
-    const reconciled = reconcile.length
-      ? await db.query(
-          `UPDATE transactions t SET paid = true, date = d.date, import_ref = d.ref
-             FROM unnest($3::uuid[], $4::date[], $5::text[], $6::bigint[]) AS d(id, date, ref, amount)
-            WHERE t.id = d.id AND t.user_id = $1 AND (t.account_id = $2 OR t.to_account_id = $2)
-              AND t.import_ref IS NULL AND t.amount_cents = d.amount
-              AND NOT EXISTS (SELECT 1 FROM transactions x WHERE x.account_id = t.account_id AND x.import_ref = d.ref)`,
-          [userId, accountId, reconcile.map((d) => d.matchId), reconcile.map((d) => d.date), reconcile.map((d) => d.ref), reconcile.map((d) => d.amount)],
-        )
-      : { rowCount: 0 };
-    return { created: created.rowCount ?? 0, reconciled: reconciled.rowCount ?? 0, skipped: decisions.length - (created.rowCount ?? 0) - (reconciled.rowCount ?? 0) };
+    // Um único comando: registra a importação, cria, concilia e guarda o que mudou (para desfazer).
+    const { rows } = await db.query(
+      `WITH imp AS (
+         INSERT INTO statement_imports (user_id, account_id, file_name) VALUES ($1, $2, $9) RETURNING id
+       ), created AS (
+         INSERT INTO transactions (user_id, type, description, amount_cents, date, paid, account_id, category_id, import_ref)
+         SELECT $1, d.type, left(d.description, ${LIMITS.description}), d.amount, d.date, true, $2, d.category, d.ref
+           FROM unnest($3::text[], $4::text[], $5::bigint[], $6::date[], $7::uuid[], $8::text[]) AS d(type, description, amount, date, category, ref)
+         ON CONFLICT (account_id, import_ref) WHERE import_ref IS NOT NULL DO NOTHING
+         RETURNING id
+       ), old AS (
+         SELECT t.id, t.date AS prev_date, t.paid AS prev_paid, d.date, d.ref
+           FROM transactions t
+           JOIN unnest($10::uuid[], $11::date[], $12::text[], $13::bigint[]) AS d(id, date, ref, amount) ON d.id = t.id
+          WHERE t.user_id = $1 AND (t.account_id = $2 OR t.to_account_id = $2)
+            AND t.import_ref IS NULL AND t.amount_cents = d.amount
+            AND NOT EXISTS (SELECT 1 FROM transactions x WHERE x.account_id = t.account_id AND x.import_ref = d.ref)
+       ), reconciled AS (
+         -- Conciliar: o pendente lançado à mão vira pago na data do extrato e fica ligado à linha.
+         UPDATE transactions t SET paid = true, date = old.date, import_ref = old.ref
+           FROM old WHERE t.id = old.id
+         RETURNING t.id, old.prev_date, old.prev_paid
+       ), items AS (
+         INSERT INTO statement_import_items (import_id, transaction_id, action, prev_date, prev_paid)
+         SELECT (SELECT id FROM imp), id, 'created', NULL, NULL FROM created
+         UNION ALL
+         SELECT (SELECT id FROM imp), id, 'reconciled', prev_date, prev_paid FROM reconciled
+       )
+       SELECT (SELECT id FROM imp) AS import_id, (SELECT count(*) FROM created) AS created, (SELECT count(*) FROM reconciled) AS reconciled`,
+      [
+        userId, accountId,
+        create.map((d) => d.type), create.map((d) => d.description.trim() || (d.type === "income" ? "Entrada" : "Saída")),
+        create.map((d) => d.amount), create.map((d) => d.date), create.map((d) => d.categoryId || null), create.map((d) => d.ref),
+        fileName ? fileName.slice(0, 200) : null,
+        reconcile.map((d) => d.matchId), reconcile.map((d) => d.date), reconcile.map((d) => d.ref), reconcile.map((d) => d.amount),
+      ],
+    );
+    const created = Number(rows[0].created);
+    const reconciled = Number(rows[0].reconciled);
+    // Importação que não mudou nada não fica na lista; as outras guardam os totais (só para mostrar).
+    if (!created && !reconciled) await db.query("DELETE FROM statement_imports WHERE id = $1", [rows[0].import_id]);
+    else await db.query("UPDATE statement_imports SET created_count = $2, reconciled_count = $3 WHERE id = $1", [rows[0].import_id, created, reconciled]);
+    return { created, reconciled, skipped: decisions.length - created - reconciled, importId: created || reconciled ? rows[0].import_id : null };
   } catch (err) {
     throw toUserError(err);
   }
+}
+
+export type StatementImport = {
+  id: string;
+  accountId: string;
+  accountName: string;
+  fileName: string | null;
+  created: number;
+  reconciled: number;
+  createdAt: string;
+  undoneAt: string | null;
+};
+
+/** Importações recentes (para a pessoa conferir e, se quiser, desfazer). */
+export async function listImports(db: Db, userId: string, limit = 20): Promise<StatementImport[]> {
+  const { rows } = await db.query(
+    `SELECT i.id, i.account_id, a.name AS account_name, i.file_name, i.created_count, i.reconciled_count, i.created_at, i.undone_at
+       FROM statement_imports i JOIN accounts a ON a.id = i.account_id
+      WHERE i.user_id = $1 ORDER BY i.created_at DESC LIMIT $2`,
+    [userId, limit],
+  );
+  return rows.map((r) => ({
+    id: r.id, accountId: r.account_id, accountName: r.account_name, fileName: r.file_name,
+    created: Number(r.created_count), reconciled: Number(r.reconciled_count),
+    createdAt: new Date(r.created_at).toISOString(), undoneAt: r.undone_at ? new Date(r.undone_at).toISOString() : null,
+  }));
+}
+
+/**
+ * Desfaz uma importação inteira, num único comando: apaga os lançamentos que ela criou e devolve
+ * os conciliados ao que eram (data, pendente/pago, sem ligação com o extrato). Desfazer de novo
+ * não faz nada. Lançamentos criados e depois editados à mão também são apagados (vieram do extrato).
+ */
+export async function undoImport(db: Db, userId: string, importId: string): Promise<{ removed: number; restored: number }> {
+  assertUuid(importId, "Importação não encontrada.");
+  const { rows } = await db.query(
+    `WITH imp AS (
+       UPDATE statement_imports SET undone_at = now() WHERE id = $1 AND user_id = $2 AND undone_at IS NULL RETURNING id
+     ), restored AS (
+       UPDATE transactions t SET date = it.prev_date, paid = it.prev_paid, import_ref = NULL
+         FROM statement_import_items it
+        WHERE it.import_id = (SELECT id FROM imp) AND it.action = 'reconciled' AND t.id = it.transaction_id AND t.user_id = $2
+       RETURNING t.id
+     ), removed AS (
+       DELETE FROM transactions t USING statement_import_items it
+        WHERE it.import_id = (SELECT id FROM imp) AND it.action = 'created' AND t.id = it.transaction_id AND t.user_id = $2
+       RETURNING t.id
+     )
+     SELECT (SELECT count(*) FROM imp) AS found, (SELECT count(*) FROM removed) AS removed, (SELECT count(*) FROM restored) AS restored`,
+    [importId, userId],
+  );
+  if (!Number(rows[0].found)) {
+    const { rows: done } = await db.query("SELECT 1 FROM statement_imports WHERE id = $1 AND user_id = $2", [importId, userId]);
+    throw new UserError(done.length ? "Esta importação já foi desfeita." : "Importação não encontrada.");
+  }
+  return { removed: Number(rows[0].removed), restored: Number(rows[0].restored) };
 }

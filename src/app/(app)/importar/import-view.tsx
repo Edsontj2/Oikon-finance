@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { FileUp } from "lucide-react";
+import { FileUp, History } from "lucide-react";
 import type { AccountOption } from "@/domain/accounts";
 import { sortedCategoryOptions, type CategoryOption } from "@/domain/categories";
 import { MAX_STATEMENT_BYTES, parseStatement } from "@/domain/statement";
@@ -10,7 +10,10 @@ import { formatDate } from "@/lib/dates";
 import { Money } from "@/components/money";
 import { FormError } from "@/components/form-error";
 import { useToast } from "@/components/toast";
-import { importStatement, previewStatement } from "./actions";
+import { importStatement, previewStatement, undoStatementImport } from "./actions";
+import type { StatementImport } from "@/data/statement-import";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useServerAction } from "@/components/use-server-action";
 
 type Action = "create" | "reconcile" | "skip";
 type Row = ImportPreviewLine & { action: Action; chosenCategory: string };
@@ -32,13 +35,14 @@ async function readText(file: File): Promise<string> {
   }
 }
 
-export function ImportView({ accounts, categories, defaultAccountId }: { accounts: AccountOption[]; categories: CategoryOption[]; defaultAccountId: string }) {
+export function ImportView({ accounts, categories, defaultAccountId, imports }: { accounts: AccountOption[]; categories: CategoryOption[]; defaultAccountId: string; imports: StatementImport[] }) {
   const [accountId, setAccountId] = useState(defaultAccountId);
   const account = accounts.find((a) => a.id === accountId);
   const [positiveIsExpense, setPositiveIsExpense] = useState(account?.type === "credit_card");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const toast = useToast();
   const options = sortedCategoryOptions(categories);
@@ -47,6 +51,7 @@ export function ImportView({ accounts, categories, defaultAccountId }: { account
     setError(null);
     setRows(null);
     if (!file) return;
+    setFileName(file.name);
     if (file.size > MAX_STATEMENT_BYTES) return setError("Arquivo grande demais (máximo 1 MB). Exporte um período menor.");
     if (/\.xlsx?$/i.test(file.name)) return setError("Planilha do Excel: abra no Excel ou no Google Planilhas e salve como CSV.");
     start(async () => {
@@ -79,6 +84,7 @@ export function ImportView({ accounts, categories, defaultAccountId }: { account
       const result = await importStatement(
         accountId,
         rows.map((r) => ({ ref: r.ref, date: r.date, description: r.description, amount: r.amount, type: r.type, action: r.action, matchId: r.match?.id ?? null, categoryId: r.chosenCategory || null })),
+        fileName,
       );
       if (!result.ok) return setError(result.message);
       toast(result.message);
@@ -153,6 +159,49 @@ export function ImportView({ accounts, categories, defaultAccountId }: { account
           </div>
         </section>
       )}
+      <ImportHistory imports={imports} />
     </>
+  );
+}
+
+/** Importações feitas: dá para desfazer uma inteira (apaga o que criou e devolve os conciliados). */
+function ImportHistory({ imports }: { imports: StatementImport[] }) {
+  const [undoing, setUndoing] = useState<StatementImport | null>(null);
+  const undo = useServerAction(undoStatementImport, () => setUndoing(null));
+  if (!imports.length) return null;
+  return (
+    <section className="card stack" aria-labelledby="importacoes-title">
+      <h2 id="importacoes-title" className="card-icon-title"><History size={18} aria-hidden /> Importações feitas</h2>
+      <ul className="list">
+        {imports.map((i) => (
+          <li key={i.id} className="mini-list-line device-row" data-testid="importacao">
+            <span>
+              {i.fileName ?? "Extrato"} · {i.accountName}
+              <span className="hint">
+                {" "}· {formatDate(i.createdAt.slice(0, 10))} · {i.created} lançado{i.created === 1 ? "" : "s"}
+                {i.reconciled ? `, ${i.reconciled} conciliado${i.reconciled === 1 ? "" : "s"}` : ""}
+              </span>
+            </span>
+            {i.undoneAt ? (
+              <span className="tag">Desfeita</span>
+            ) : (
+              <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setUndoing(i)}>Desfazer</button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="hint">Importações feitas antes desta opção existir não aparecem aqui; os lançamentos delas podem ser excluídos em Lançamentos → Selecionar.</p>
+      <ConfirmDialog
+        open={undoing !== null}
+        onClose={() => setUndoing(null)}
+        title="Desfazer esta importação?"
+        message={undoing ? `${undoing.created} lançamento${undoing.created === 1 ? "" : "s"} criado${undoing.created === 1 ? "" : "s"} pelo extrato ${undoing.created === 1 ? "será excluído" : "serão excluídos"}${undoing.reconciled ? ` e ${undoing.reconciled} conciliado${undoing.reconciled === 1 ? "" : "s"} ${undoing.reconciled === 1 ? "volta" : "voltam"} a ser como eram antes` : ""}. Os saldos voltam ao que eram antes da importação.` : ""}
+        error={undo.error}
+      >
+        <button type="button" className="btn btn-danger" disabled={undo.pending} onClick={() => undoing && undo.run(undoing.id)}>
+          {undo.pending ? "Desfazendo…" : "Desfazer importação"}
+        </button>
+      </ConfirmDialog>
+    </section>
   );
 }

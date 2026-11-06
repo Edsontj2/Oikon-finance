@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { UserError } from "@/data/errors";
-import { applyImport, previewImport, type ImportDecision, type ImportPreviewLine } from "@/data/statement-import";
+import { applyImport, previewImport, undoImport, type ImportDecision, type ImportPreviewLine } from "@/data/statement-import";
+import { runAction, type ActionResult } from "../../action-result";
 import type { StatementLine } from "@/domain/statement";
 
 export type PreviewResult = { ok: true; lines: ImportPreviewLine[] } | { ok: false; message: string };
@@ -21,10 +22,10 @@ export async function previewStatement(accountId: string, lines: StatementLine[]
   }
 }
 
-export async function importStatement(accountId: string, decisions: ImportDecision[]): Promise<ApplyResult> {
+export async function importStatement(accountId: string, decisions: ImportDecision[], fileName: string | null = null): Promise<ApplyResult> {
   const userId = await requireUserId();
   try {
-    const r = await applyImport(getDb(), userId, accountId, Array.isArray(decisions) ? decisions : []);
+    const r = await applyImport(getDb(), userId, accountId, Array.isArray(decisions) ? decisions : [], typeof fileName === "string" ? fileName : null);
     revalidatePath("/", "layout");
     const parts = [
       r.created && `${r.created} lançado${r.created > 1 ? "s" : ""}`,
@@ -36,4 +37,14 @@ export async function importStatement(accountId: string, decisions: ImportDecisi
     console.error(err);
     return { ok: false, message: "Não foi possível importar agora. Tente de novo." };
   }
+}
+
+export async function undoStatementImport(importId: string): Promise<ActionResult> {
+  const userId = await requireUserId();
+  let msg = "Importação desfeita.";
+  const result = await runAction(msg, async () => {
+    const r = await undoImport(getDb(), userId, importId);
+    msg = `Importação desfeita: ${r.removed} lançamento${r.removed === 1 ? "" : "s"} excluído${r.removed === 1 ? "" : "s"}${r.restored ? `, ${r.restored} conciliado${r.restored === 1 ? "" : "s"} restaurado${r.restored === 1 ? "" : "s"}` : ""}.`;
+  });
+  return result.ok ? { ok: true, message: msg } : result;
 }
