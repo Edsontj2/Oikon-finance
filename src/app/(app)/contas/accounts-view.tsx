@@ -64,7 +64,9 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
               {editing.type === "credit_card" && (
                 <Link className="btn btn-secondary" href={`/cartoes/${editing.id}`}>Faturas e limite</Link>
               )}
-              <Link className="btn btn-secondary" href={`/contas/${editing.id}`}>Conciliar e histórico</Link>
+              <Link className="btn btn-secondary" href={`/contas/${editing.id}`}>
+                {editing.type === "checking" ? "Cartão, conciliação e histórico" : "Conciliar e histórico"}
+              </Link>
               <Link className="btn btn-secondary" href={`/lancamentos?conta=${editing.id}`}>
                 Ver lançamentos ({editing.transactionCount})
               </Link>
@@ -118,18 +120,31 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
   );
 }
 
+/** O cartão de uma conta corrente aparece logo abaixo dela. */
+function nestCards(accounts: AccountWithBalance[]) {
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  const childOf = (a: AccountWithBalance) => (a.cardOfAccountId && byId.has(a.cardOfAccountId) ? a.cardOfAccountId : null);
+  const out: { account: AccountWithBalance; parent: AccountWithBalance | null }[] = [];
+  for (const a of accounts) {
+    if (childOf(a)) continue;
+    out.push({ account: a, parent: null });
+    for (const c of accounts) if (childOf(c) === a.id) out.push({ account: c, parent: a });
+  }
+  return out;
+}
+
 function AccountList({ accounts, onEdit }: { accounts: AccountWithBalance[]; onEdit: (a: AccountWithBalance) => void }) {
   return (
     <ul className="list card">
-      {accounts.map((a) => (
-        <li key={a.id} className="row" data-testid="conta">
+      {nestCards(accounts).map(({ account: a, parent }) => (
+        <li key={a.id} className={parent ? "row row-nested" : "row"} data-testid="conta">
           <button type="button" className="row-main" onClick={() => onEdit(a)} aria-label={`Editar conta ${a.name}`}>
             <AccountIcon icon={a.icon} color={a.color} type={a.type} />
             <span className="row-text">
               <span className="row-title">{a.name}</span>
               <span className="row-sub">
-                {accountTypes[a.type]}
-                {a.institution && <> · {a.institution}</>}
+                {parent ? <>Cartão da conta {parent.name}</> : accountTypes[a.type]}
+                {a.institution && !parent && <> · {a.institution}</>}
                 {a.projectedBalance !== a.balance && <> · com pendentes: <Money cents={a.projectedBalance} /></>}
                 {a.overdraftLimit ? (
                   <>

@@ -12,18 +12,23 @@ import { MoneyInput } from "@/components/money-input";
 import { FormError } from "@/components/form-error";
 import { AccountIcon } from "@/components/account-icon";
 import { useServerAction } from "@/components/use-server-action";
+import type { CardDetail } from "@/data/cards";
 import { archiveAccount, reconcile } from "../../actions";
+import { AccountCard } from "./account-card";
 
 export function AccountDetail({
   account,
   reconciliations,
   audit,
   today,
+  card,
 }: {
   account: AccountWithBalance;
   reconciliations: Reconciliation[];
   audit: AuditEntry[];
   today: string;
+  /** Só para conta corrente: o cartão ligado e os cartões que podem ser ligados. */
+  card: { card: CardDetail | null; unlinked: { id: string; name: string }[] } | null;
 }) {
   const [formKey, setFormKey] = useState(() => crypto.randomUUID());
   const save = useServerAction(reconcile, () => setFormKey(crypto.randomUUID()));
@@ -50,6 +55,10 @@ export function AccountDetail({
         {account.institution && <> · {account.institution}</>}
         {account.archived && <> · <span className="tag tag-installment">Arquivada</span></>}
       </p>
+
+      {card && !account.archived && (
+        <AccountCard accountId={account.id} accountBalance={account.balance} card={card.card} unlinked={card.unlinked} today={today} />
+      )}
 
       <section className="card" aria-labelledby="conciliar-title">
         <h2 id="conciliar-title" className="card-title">Conciliar com o extrato</h2>

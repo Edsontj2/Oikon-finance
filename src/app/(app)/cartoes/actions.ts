@@ -1,6 +1,9 @@
 "use server";
 
 import {
+  addCardToAccount,
+  linkCardToAccount,
+  unlinkCard,
   addCharge,
   addRefund,
   installInvoice,
@@ -12,12 +15,25 @@ import type { ChargeKind } from "@/domain/cards";
 import { getDb } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { field, moneyField, runAction, wholeNumberField, type ActionResult } from "../../action-result";
+import { cardSettingsFromForm, dayOrNull } from "./card-form";
 
-function dayOrNull(form: FormData, name: string): number | null {
-  const text = field(form, name).trim();
-  if (!text) return null;
-  return /^\d{1,2}$/.test(text) ? Number(text) : Number.NaN;
+/** Cria o cartão de crédito de uma conta corrente. */
+export async function addAccountCard(form: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+  return runAction("Cartão de crédito adicionado à conta.", () => addCardToAccount(getDb(), userId, field(form, "accountId"), cardSettingsFromForm(form)));
 }
+
+/** Liga um cartão já cadastrado a uma conta corrente. */
+export async function linkAccountCard(accountId: string, cardId: string): Promise<ActionResult> {
+  const userId = await requireUserId();
+  return runAction("Cartão ligado à conta.", () => linkCardToAccount(getDb(), userId, accountId, cardId));
+}
+
+export async function unlinkAccountCard(cardId: string): Promise<ActionResult> {
+  const userId = await requireUserId();
+  return runAction("Cartão desligado da conta.", () => unlinkCard(getDb(), userId, cardId));
+}
+
 
 export async function saveCardSettings(form: FormData): Promise<ActionResult> {
   const userId = await requireUserId();

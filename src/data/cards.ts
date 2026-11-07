@@ -3,7 +3,8 @@
  * dinheiro passa por createTransaction (mesma validação, mesma chave anti-duplicidade e a
  * mesma regra de saldo do resto do app); aqui só se decide o que lançar.
  */
-import { num, type Db } from "@/lib/db";
+import type { Pool } from "pg";
+import { inTransaction, num, type Db } from "@/lib/db";
 import { isValidDate, isValidMonth, today } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { UserError, assertUuid, isUuid } from "./errors";
@@ -395,4 +396,85 @@ export async function moveToInvoice(db: Db, userId: string, transactionId: strin
     [transactionId, userId, invoiceMonth],
   );
   if (!rowCount) throw new UserError("Lançamento de cartão não encontrado.");
+}
+
+// ---------- Conta corrente com cartão de crédito ----------
+
+export type AccountCardInput = { creditLimit: number | null; closingDay: number | null; dueDay: number | null; last4?: string | null };
+
+async function requireCheckingWithoutCard(db: Db, userId: string, accountId: string) {
+  assertUuid(accountId, "Conta não encontrada.");
+  const { rows } = await db.query(
+    `SELECT a.name, a.type, a.archived, a.institution, a.color,
+            EXISTS (SELECT 1 FROM accounts c WHERE c.card_of_account_id = a.id) AS has_card
+       FROM accounts a WHERE a.id = $1 AND a.user_id = $2`,
+    [accountId, userId],
+  );
+  const acc = rows[0];
+  if (!acc) throw new UserError("Conta não encontrada.");
+  if (acc.type !== "checking") throw new UserError("Só conta corrente pode ter cartão de crédito ligado.");
+  if (acc.archived) throw new UserError("Reative a conta antes de ligar um cartão.");
+  if (acc.has_card) throw new UserError("Esta conta já tem um cartão de crédito.");
+  return acc as { name: string; institution: string | null; color: string | null };
+}
+
+/**
+ * Cria o cartão de crédito de uma conta corrente: um cartão (faturas, limite, parcelas) ligado à
+ * conta, que fica como pagadora da fatura. Tudo numa transação: ou cria e liga, ou nada muda.
+ */
+export async function addCardToAccount(pool: Pool, userId: string, accountId: string, input: AccountCardInput): Promise<string> {
+  return inTransaction(pool, async (db) => {
+    const acc = await requireCheckingWithoutCard(db, userId, accountId);
+    let name = `Cartão ${acc.name}`.slice(0, LIMITS.accountName);
+    const { rows: taken } = await db.query("SELECT 1 FROM accounts WHERE user_id = $1 AND lower(name) = lower($2)", [userId, name]);
+    if (taken.length) name = `${acc.name} crédito`.slice(0, LIMITS.accountName);
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO accounts (user_id, name, type, initial_balance_cents, institution, color, card_of_account_id)
+       VALUES ($1, $2, 'credit_card', 0, $3, $4, $5) RETURNING id`,
+      [userId, name, acc.institution, acc.color, accountId],
+    );
+    const cardId = rows[0].id;
+    await updateCardSettings(db, userId, cardId, {
+      creditLimit: input.creditLimit, closingDay: input.closingDay, dueDay: input.dueDay, payerAccountId: accountId, brand: null, last4: input.last4 ?? null,
+    });
+    return cardId;
+  });
+}
+
+/** Liga um cartão já cadastrado a uma conta corrente (a conta passa a pagar a fatura). */
+export async function linkCardToAccount(db: Db, userId: string, accountId: string, cardId: string): Promise<void> {
+  await requireCheckingWithoutCard(db, userId, accountId);
+  assertUuid(cardId, "Cartão não encontrado.");
+  const { rowCount } = await db.query(
+    `UPDATE accounts SET card_of_account_id = $3, payer_account_id = $3
+      WHERE id = $1 AND user_id = $2 AND type = 'credit_card' AND card_of_account_id IS NULL`,
+    [cardId, userId, accountId],
+  );
+  if (!rowCount) throw new UserError("Cartão não encontrado ou já ligado a outra conta.");
+}
+
+/** Desliga o cartão da conta (ele continua existindo como cartão separado, com tudo que tinha). */
+export async function unlinkCard(db: Db, userId: string, cardId: string): Promise<void> {
+  assertUuid(cardId, "Cartão não encontrado.");
+  const { rowCount } = await db.query(
+    "UPDATE accounts SET card_of_account_id = NULL WHERE id = $1 AND user_id = $2 AND card_of_account_id IS NOT NULL",
+    [cardId, userId],
+  );
+  if (!rowCount) throw new UserError("Cartão não encontrado.");
+}
+
+/** O cartão ligado a uma conta corrente (ou null). */
+export async function getAccountCard(db: Db, userId: string, accountId: string, now = new Date()): Promise<CardDetail | null> {
+  if (!isUuid(accountId)) return null;
+  const { rows } = await db.query("SELECT id FROM accounts WHERE user_id = $1 AND card_of_account_id = $2", [userId, accountId]);
+  return rows[0] ? getCard(db, userId, rows[0].id, now) : null;
+}
+
+/** Cartões ainda sem conta corrente (para ligar a uma). */
+export async function listUnlinkedCards(db: Db, userId: string): Promise<{ id: string; name: string }[]> {
+  const { rows } = await db.query(
+    "SELECT id, name FROM accounts WHERE user_id = $1 AND type = 'credit_card' AND card_of_account_id IS NULL AND NOT archived ORDER BY created_at, name",
+    [userId],
+  );
+  return rows;
 }

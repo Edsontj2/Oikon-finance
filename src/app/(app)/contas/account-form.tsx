@@ -20,6 +20,7 @@ export function AccountForm({
 }) {
   const [submissionKey] = useState(() => crypto.randomUUID());
   const [type, setType] = useState<AccountType>(account?.type ?? "checking");
+  const [hasCard, setHasCard] = useState(false);
   const { run, pending, error } = useServerAction(saveAccount, onDone);
   const selectedIcon = account?.icon ?? defaultIcon[type];
   return (
@@ -64,6 +65,20 @@ export function AccountForm({
           hint="Limite que o banco libera além do saldo. Só serve de aviso: o app não usa como dinheiro seu."
         />
       )}
+      {!account && type === "checking" && (
+        <div className="stack">
+          <label className="check">
+            <input type="checkbox" name="hasCard" checked={hasCard} onChange={(e) => setHasCard(e.target.checked)} />
+            Esta conta também tem cartão de crédito
+          </label>
+          {hasCard && (
+            <>
+              <AccountCardFields />
+              <p className="hint">A fatura poderá ser paga com o saldo desta conta, direto na página dela.</p>
+            </>
+          )}
+        </div>
+      )}
       <fieldset className="choice-grid" key={`icon-${type}`}>
         <legend>Ícone</legend>
         {accountIcons.map((icon) => {
@@ -95,5 +110,19 @@ export function AccountForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/** Campos do cartão de crédito de uma conta corrente (limite, fechamento, vencimento, final). */
+export function AccountCardFields() {
+  return (
+    <>
+      <MoneyInput name="creditLimit" label="Limite do cartão (R$)" hint="Deixe vazio se não quiser controlar." />
+      <div className="fields">
+        <label>Dia de fechamento<input name="closingDay" inputMode="numeric" maxLength={2} placeholder="Ex.: 3" /></label>
+        <label>Dia de vencimento<input name="dueDay" inputMode="numeric" maxLength={2} placeholder="Ex.: 10" /></label>
+        <label>Final (opcional)<input name="last4" inputMode="numeric" maxLength={4} placeholder="1234" /></label>
+      </div>
+    </>
   );
 }

@@ -58,6 +58,8 @@ export type AccountWithBalance = AccountOption & {
   archived?: boolean;
   /** Cheque especial (só conta corrente), em centavos. */
   overdraftLimit?: number | null;
+  /** Cartão: conta corrente à qual ele pertence (conta com cartão de crédito). */
+  cardOfAccountId?: string | null;
 };
 
 /** Quanto ainda dá para gastar na conta contando o cheque especial. */

@@ -254,6 +254,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .row { display: flex; align-items: center; gap: 0.5rem; padding-right: 0.75rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .row:last-child { border-bottom: 0; }
 .row { transition: background-color 150ms; }
+.row-nested { padding-left: 1.5rem; background: color-mix(in srgb, var(--border) 18%, transparent); }
 @media (hover: hover) { .row:hover { background: rgba(255, 255, 255, 0.04); } }
 .row-main {
   all: unset; box-sizing: border-box; cursor: pointer; flex: 1; min-width: 0;

@@ -15,6 +15,8 @@ import {
   deleteTransactions,
 } from "@/data/transactions";
 import { UserError } from "@/data/errors";
+import { addCardToAccount } from "@/data/cards";
+import { cardSettingsFromForm } from "./cartoes/card-form";
 import { payProjectedNow, stopRecurring } from "@/data/recurring";
 import { getDb } from "@/lib/db";
 import { endSession, requireUserId } from "@/lib/auth";
@@ -103,9 +105,11 @@ export async function saveAccount(form: FormData): Promise<ActionResult> {
     overdraftLimit: field(form, "type") === "checking" ? moneyField(form, "overdraftLimit", "Cheque especial", true) : null,
   });
   if (id) return runAction("Conta atualizada.", () => updateAccount(getDb(), userId, id, input()));
-  return runAction("Conta criada.", () =>
-    createAccount(getDb(), userId, { ...input(), submissionKey: field(form, "submissionKey") }),
-  );
+  const withCard = field(form, "type") === "checking" && field(form, "hasCard") === "on";
+  return runAction(withCard ? "Conta e cartão de crédito criados." : "Conta criada.", async () => {
+    const id = await createAccount(getDb(), userId, { ...input(), submissionKey: field(form, "submissionKey") });
+    if (id && withCard) await addCardToAccount(getDb(), userId, id, cardSettingsFromForm(form));
+  });
 }
 
 export async function removeAccount(id: string): Promise<ActionResult> {

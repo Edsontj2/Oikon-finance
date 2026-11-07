@@ -15,7 +15,7 @@ test("conta: instituição, ícone, cheque especial, conciliação com ajuste e 
   await expect(page.getByText("Banco Azul S.A.")).toBeVisible();
 
   await page.getByRole("button", { name: "Editar conta Banco Azul" }).click();
-  await dialog(page).getByRole("link", { name: "Conciliar e histórico" }).click();
+  await dialog(page).getByRole("link", { name: /onciliação e histórico|Conciliar e histórico/ }).click();
   await expect(page.getByTestId("conta-saldo")).toHaveAttribute("data-cents", "100000");
 
   await page.getByLabel("Saldo no extrato (R$)").fill("987,65");

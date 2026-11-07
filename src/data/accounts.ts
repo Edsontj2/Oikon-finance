@@ -23,7 +23,7 @@ export { accountTypes, isAccountType, type AccountOption, type AccountType, type
  */
 export async function listAccounts(db: Db, userId: string, now: Date = new Date()): Promise<AccountWithBalance[]> {
   const { rows } = await db.query(
-    `SELECT a.id, a.name, a.type, a.initial_balance_cents, a.institution, a.color, a.icon, a.archived, a.overdraft_limit_cents,
+    `SELECT a.id, a.name, a.type, a.initial_balance_cents, a.institution, a.color, a.icon, a.archived, a.overdraft_limit_cents, a.card_of_account_id,
             count(DISTINCT e.transaction_id) AS transaction_count,
             a.initial_balance_cents + COALESCE(SUM(e.delta) FILTER (WHERE e.paid AND e.date <= $2), 0) AS balance,
             a.initial_balance_cents + COALESCE(SUM(e.delta), 0) AS projected
@@ -47,6 +47,7 @@ export async function listAccounts(db: Db, userId: string, now: Date = new Date(
     icon: r.icon ?? null,
     archived: r.archived === true,
     overdraftLimit: r.overdraft_limit_cents === null ? null : num(r.overdraft_limit_cents),
+    cardOfAccountId: r.card_of_account_id ?? null,
   }));
 }
 
