@@ -26,6 +26,7 @@ import {
   type Invoice,
 } from "@/domain/cards";
 import { createTransaction } from "./transactions";
+import { pairCards } from "./card-pairing";
 
 export type CardSettings = {
   creditLimit: number | null;
@@ -210,6 +211,14 @@ export async function updateCardSettings(db: Db, userId: string, cardId: string,
     [cardId, userId, limit, closingDay, dueDay, input.payerAccountId || null, brand, last4],
   );
   if (!rows.length) throw new UserError("Cartão não encontrado.");
+  // Trocou a conta que paga: o cartão passa a ser dessa conta corrente (se ela não tiver outro).
+  await db.query(
+    `UPDATE accounts SET card_of_account_id = NULL
+      WHERE id = $1 AND user_id = $2 AND card_of_account_id IS NOT NULL AND card_of_account_id IS DISTINCT FROM payer_account_id`,
+    [cardId, userId],
+  );
+  if (input.payerAccountId) await db.query("UPDATE accounts SET card_link_manual_off = false WHERE id = $1 AND user_id = $2", [cardId, userId]);
+  await pairCards(db, userId);
   const oldLimit = rows[0].old_limit === null ? null : num(rows[0].old_limit);
   if (oldLimit !== limit) {
     await db.query("INSERT INTO card_limit_changes (user_id, account_id, limit_cents) VALUES ($1, $2, $3)", [userId, cardId, limit]);
@@ -446,7 +455,7 @@ export async function linkCardToAccount(db: Db, userId: string, accountId: strin
   await requireCheckingWithoutCard(db, userId, accountId);
   assertUuid(cardId, "Cartão não encontrado.");
   const { rowCount } = await db.query(
-    `UPDATE accounts SET card_of_account_id = $3, payer_account_id = $3
+    `UPDATE accounts SET card_of_account_id = $3, payer_account_id = $3, card_link_manual_off = false
       WHERE id = $1 AND user_id = $2 AND type = 'credit_card' AND card_of_account_id IS NULL`,
     [cardId, userId, accountId],
   );
@@ -457,7 +466,7 @@ export async function linkCardToAccount(db: Db, userId: string, accountId: strin
 export async function unlinkCard(db: Db, userId: string, cardId: string): Promise<void> {
   assertUuid(cardId, "Cartão não encontrado.");
   const { rowCount } = await db.query(
-    "UPDATE accounts SET card_of_account_id = NULL WHERE id = $1 AND user_id = $2 AND card_of_account_id IS NOT NULL",
+    "UPDATE accounts SET card_of_account_id = NULL, card_link_manual_off = true WHERE id = $1 AND user_id = $2 AND card_of_account_id IS NOT NULL",
     [cardId, userId],
   );
   if (!rowCount) throw new UserError("Cartão não encontrado.");

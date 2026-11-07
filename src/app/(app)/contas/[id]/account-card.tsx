@@ -105,7 +105,7 @@ function NoCard({ accountId, unlinked }: { accountId: string; unlinked: { id: st
   const [pick, setPick] = useState(unlinked[0]?.id ?? "");
   return (
     <div className="stack">
-      <p className="muted">Se esta conta tem cartão de crédito, adicione aqui: a fatura pode ser paga com o saldo da conta.</p>
+      <p className="muted">Se esta conta tem cartão de crédito, adicione aqui: a fatura pode ser paga com o saldo da conta. Cartões da mesma instituição, com o nome da conta ou pagos por ela são ligados automaticamente.</p>
       {open ? (
         <form
           className="stack"

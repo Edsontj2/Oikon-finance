@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type pg from "pg";
 import { createAccount, deleteAccount, listAccounts } from "@/data/accounts";
 import { createTransaction } from "@/data/transactions";
-import { addCardToAccount, getAccountCard, getCard, linkCardToAccount, listUnlinkedCards, payInvoice, unlinkCard } from "@/data/cards";
+import { addCardToAccount, getAccountCard, getCard, linkCardToAccount, listUnlinkedCards, payInvoice, unlinkCard, updateCardSettings } from "@/data/cards";
+import { updateAccount } from "@/data/accounts";
 import { freshDb, newUser } from "./setup";
 
 let db: pg.Pool;
@@ -51,7 +52,9 @@ describe("conta corrente com cartão de crédito", () => {
     const s = await setup();
     const savings = (await createAccount(db, s.userId, { name: "Poupança", type: "savings", initialBalance: 0 }))!;
     await expect(addCardToAccount(db, s.userId, savings, { creditLimit: null, closingDay: 3, dueDay: 10 })).rejects.toThrow("Só conta corrente");
-    await createAccount(db, s.userId, { name: "Cartão Banco Azul", type: "credit_card", initialBalance: 0 });
+    const same = (await createAccount(db, s.userId, { name: "Cartão Banco Azul", type: "credit_card", initialBalance: 0 }))!;
+    expect((await getAccountCard(db, s.userId, s.bank, NOW))?.id).toBe(same); // ligou sozinho pelo nome
+    await unlinkCard(db, s.userId, same);
     const id = await addCardToAccount(db, s.userId, s.bank, { creditLimit: null, closingDay: 3, dueDay: 10 });
     expect((await getAccountCard(db, s.userId, s.bank, NOW))!.name).toBe("Banco Azul crédito");
     // dia inválido: o cartão não deve ser criado
@@ -64,6 +67,7 @@ describe("conta corrente com cartão de crédito", () => {
   it("liga e desliga um cartão já cadastrado; outra pessoa não consegue", async () => {
     const s = await setup();
     const card = (await createAccount(db, s.userId, { name: "Roxinho", type: "credit_card", initialBalance: 0 }))!;
+    expect(await getAccountCard(db, s.userId, s.bank, NOW)).toBeNull(); // nome e instituição não combinam
     expect((await listUnlinkedCards(db, s.userId)).map((c) => c.name)).toEqual(["Roxinho"]);
     const other = await newUser(db);
     await expect(linkCardToAccount(db, other, s.bank, card)).rejects.toThrow("Conta não encontrada");
@@ -82,5 +86,44 @@ describe("conta corrente com cartão de crédito", () => {
     const card = await addCardToAccount(db, s.userId, empty, { creditLimit: null, closingDay: 3, dueDay: 10 });
     await deleteAccount(db, s.userId, empty);
     expect((await listAccounts(db, s.userId, NOW)).find((a) => a.id === card)).toMatchObject({ cardOfAccountId: null });
+  });
+
+  it("liga sozinho: cartão da mesma instituição, com nome da conta, ou pago pela conta (e o contrário)", async () => {
+    const userId = await newUser(db);
+    // cartão criado depois da conta, mesma instituição
+    const nu = (await createAccount(db, userId, { name: "Nu conta", type: "checking", initialBalance: 0, institution: "Nubank" }))!;
+    const nuCard = (await createAccount(db, userId, { name: "Roxinho", type: "credit_card", initialBalance: 0, institution: "nubank " }))!;
+    expect((await getAccountCard(db, userId, nu, NOW))?.id).toBe(nuCard);
+    // conta criada depois do cartão, pelo nome
+    const itauCard = (await createAccount(db, userId, { name: "Cartão Itaú", type: "credit_card", initialBalance: 0 }))!;
+    const itau = (await createAccount(db, userId, { name: "Itaú", type: "checking", initialBalance: 0 }))!;
+    expect((await getAccountCard(db, userId, itau, NOW))?.id).toBe(itauCard);
+    // pela conta que paga a fatura
+    const inter = (await createAccount(db, userId, { name: "Inter", type: "checking", initialBalance: 0 }))!;
+    const visa = (await createAccount(db, userId, { name: "Visa", type: "credit_card", initialBalance: 0 }))!;
+    expect(await getAccountCard(db, userId, inter, NOW)).toBeNull();
+    await updateCardSettings(db, userId, visa, { creditLimit: null, closingDay: 3, dueDay: 10, payerAccountId: inter, brand: null, last4: null });
+    expect((await getAccountCard(db, userId, inter, NOW))?.id).toBe(visa);
+    // trocar a conta que paga leva o cartão junto (se a nova não tiver cartão)
+    const c6 = (await createAccount(db, userId, { name: "C6", type: "checking", initialBalance: 0 }))!;
+    await updateCardSettings(db, userId, visa, { creditLimit: null, closingDay: 3, dueDay: 10, payerAccountId: c6, brand: null, last4: null });
+    expect(await getAccountCard(db, userId, inter, NOW)).toBeNull();
+    expect((await getAccountCard(db, userId, c6, NOW))?.id).toBe(visa);
+  });
+
+  it("instituição ambígua não liga; desligado à mão não religa; mudar o tipo solta", async () => {
+    const userId = await newUser(db);
+    const a = (await createAccount(db, userId, { name: "BB 1", type: "checking", initialBalance: 0, institution: "BB" }))!;
+    const b = (await createAccount(db, userId, { name: "BB 2", type: "checking", initialBalance: 0, institution: "BB" }))!;
+    const card = (await createAccount(db, userId, { name: "Ourocard", type: "credit_card", initialBalance: 0, institution: "BB" }))!;
+    expect(await getAccountCard(db, userId, a, NOW)).toBeNull();
+    expect(await getAccountCard(db, userId, b, NOW)).toBeNull();
+    await linkCardToAccount(db, userId, a, card);
+    await unlinkCard(db, userId, card);
+    await updateAccount(db, userId, b, { name: "BB 2", type: "checking", initialBalance: 0, institution: "BB" });
+    expect(await getAccountCard(db, userId, a, NOW)).toBeNull();
+    await linkCardToAccount(db, userId, a, card);
+    await updateAccount(db, userId, a, { name: "BB 1", type: "savings", initialBalance: 0, institution: "BB" });
+    expect((await listAccounts(db, userId, NOW)).find((x) => x.id === card)!.cardOfAccountId).not.toBe(a);
   });
 });

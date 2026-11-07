@@ -100,7 +100,7 @@ export function AccountForm({
           </label>
         ))}
       </fieldset>
-      {type === "credit_card" && <p className="hint">Limite, fechamento, vencimento e conta que paga a fatura ficam em Cartões.</p>}
+      {type === "credit_card" && <p className="hint">Limite, fechamento, vencimento e conta que paga a fatura ficam em Cartões. Se a instituição ou o nome combinar com uma conta corrente (ex.: "Cartão Nubank"), o cartão é ligado a ela automaticamente.</p>}
       {type === "investment" && <p className="hint">Use para aplicações e corretora. Aportes e resgates são transferências; rendimento é uma entrada.</p>}
       <FormError message={error} />
       <div className="modal-actions">

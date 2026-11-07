@@ -1,5 +1,6 @@
 import { num, type Db } from "@/lib/db";
 import { today } from "@/lib/dates";
+import { pairCards } from "./card-pairing";
 import { UserError, assertUuid, pgCode, submissionKey, toUserError, validateOnce } from "./errors";
 import { LIMITS, TOO_BIG, isValidCents, requiredText } from "@/domain/limits";
 
@@ -130,7 +131,9 @@ export async function createAccount(
        RETURNING id`,
       [userId, account.name, account.type, account.initialBalance, key, account.institution, account.color, account.icon, account.overdraftLimit],
     );
-    return rows[0]?.id ?? null;
+    const id = rows[0]?.id ?? null;
+    if (id) await pairCards(db, userId);
+    return id;
   } catch (err) {
     throw toUserError(err);
   }
@@ -141,12 +144,18 @@ export async function updateAccount(db: Db, userId: string, accountId: string, i
   const account = await validateAccount(db, userId, input, accountId);
   try {
     const { rowCount } = await db.query(
-      `UPDATE accounts SET name = $3, type = $4, initial_balance_cents = $5, institution = $6, color = $7, icon = $8,
-              overdraft_limit_cents = $9
+      // Deixou de ser conta corrente: solta o cartão dela. Deixou de ser cartão: solta da conta.
+      `WITH drop_cards AS (
+         UPDATE accounts SET card_of_account_id = NULL WHERE card_of_account_id = $1 AND user_id = $2 AND $4::text <> 'checking'
+       )
+       UPDATE accounts SET name = $3, type = $4, initial_balance_cents = $5, institution = $6, color = $7, icon = $8,
+              overdraft_limit_cents = $9,
+              card_of_account_id = CASE WHEN $4::text = 'credit_card' THEN card_of_account_id END
         WHERE id = $1 AND user_id = $2`,
       [accountId, userId, account.name, account.type, account.initialBalance, account.institution, account.color, account.icon, account.overdraftLimit],
     );
     if (!rowCount) throw new UserError("Conta não encontrada.");
+    await pairCards(db, userId);
   } catch (err) {
     // Deixar de ser cartão com limite/fechamento cadastrados.
     if (pgCode(err) === "23514") throw new UserError("Esse cartão tem limite ou fechamento cadastrados: limpe em Cartões antes de mudar o tipo.");
